@@ -72,6 +72,8 @@ class OpenAICompatibleProvider:
                     f"模型名错误：「{self.model}」在该平台不存在（{err_msg}），"
                     "请检查模型名拼写，例如 DeepSeek 应填 deepseek-chat"
                 )
+            if resp.status_code == 402:
+                raise RuntimeError(f"余额不足：该平台账户没有可用额度（{err_msg}），请前往平台充值或领取额度")
             if resp.status_code == 429:
                 raise RuntimeError(f"额度问题：触发限流或余额不足（{err_msg}）")
             raise RuntimeError(f"接口返回错误 {resp.status_code}：{err_msg}")
