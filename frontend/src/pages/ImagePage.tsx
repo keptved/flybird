@@ -18,6 +18,10 @@ interface Msg {
   role: 'ai' | 'user'
   text: string
   options?: string[]
+  /** 问题卡内容（有值时不渲染成气泡，渲染成问题卡） */
+  card?: { no: number; title: string; question: string }
+  /** 通知行（渲染成一行小字，不渲染气泡） */
+  kind?: 'notice'
 }
 
 /** 会话状态：只存前端 state + localStorage，不落库 */
@@ -173,6 +177,7 @@ export default function ImagePage() {
         id: s.messages.length,
         role: 'ai',
         text: `第一问 · ${p.title}：${p.question}`,
+        card: { no: ASK_ITEMS.findIndex((d) => d.key === p.dimKey) + 1, title: p.title, question: p.question },
         options: p.options,
       })
     } else {
@@ -204,12 +209,11 @@ export default function ImagePage() {
 
     // 润色
     let polished = ''
-    let failReason = ''
     try {
       const res = await api.polishImage(dim.title, raws[dim.dimKey], modelId)
       polished = res.polished.trim()
     } catch (e) {
-      failReason = e instanceof Error ? e.message : String(e)
+      console.error('润色失败：', e) // 不作为主文案展示，只在控制台留底
     }
 
     const answers = { ...base.answers, [dim.dimKey]: polished || raws[dim.dimKey] }
@@ -226,20 +230,29 @@ export default function ImagePage() {
 
     const next: Session = { ...base, answers }
     next.messages = [...base.messages]
-    const noted = polished ? `「${dim.title}」记为：${polished}` : `「${dim.title}」先记下原文（润色失败：${failReason}）`
+    // 草稿变化归通知行，提问归问题卡，一件事一个元素
+    next.messages.push({
+      id: next.messages.length,
+      role: 'ai',
+      kind: 'notice',
+      text: polished
+        ? `已记入草稿 · ${dim.title}${ratioNote}`
+        : `已记入草稿 · ${dim.title}（润色失败，先记原文）${ratioNote}`,
+    })
     const p = nextQuestion(next)
     if (p) {
       next.messages.push({
         id: next.messages.length,
         role: 'ai',
-        text: `${noted}${ratioNote} 下一问 · ${p.title}：${p.question}`,
+        text: `${p.title}：${p.question}`,
+        card: { no: ASK_ITEMS.findIndex((d) => d.key === p.dimKey) + 1, title: p.title, question: p.question },
         options: p.options,
       })
     } else {
       next.messages.push({
         id: next.messages.length,
         role: 'ai',
-        text: `${noted}${ratioNote} 关键维度都补齐了，点底部「✨ 生成提示词」即可合成。`,
+        text: '关键维度都补齐了，点底部「✨ 生成提示词」即可合成。',
       })
     }
     setSession(next)
@@ -431,7 +444,7 @@ ${h.negative}
     'min-w-0 flex-1 rounded-xl border border-[#1B3A2C] bg-[#0A1410] px-3 py-2 text-[15px] text-[#EAF7F1] outline-none transition placeholder-[#5E7A6C] focus:border-[#4ADE80] focus:ring-2 focus:ring-[#4ADE80]/20'
 
   const chipCls =
-    'cursor-pointer rounded-full border border-[#1B3A2C] bg-[#0A1410] px-3 py-1 text-xs text-[#4ADE80] transition hover:bg-[#4ADE80]/10 active:scale-95'
+    'cursor-pointer rounded-full border border-[#1B3A2C] bg-[#8FA69C]/10 px-3 py-1 text-xs text-[#8FA69C] transition hover:border-[#4ADE80]/50 hover:text-[#4ADE80] active:scale-95'
 
   return (
     <div className="min-h-full bg-[#06100B]">
@@ -465,24 +478,50 @@ ${h.negative}
             <div className="space-y-3">
               {messages.map((m) => (
                 <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={
-                      m.role === 'user'
-                        ? 'max-w-[80%] rounded-2xl rounded-br-sm bg-[#4ADE80] px-4 py-2 text-[15px] leading-7 text-[#06100B] shadow-sm'
-                        : 'max-w-[80%] rounded-2xl rounded-bl-sm border border-[#1B3A2C] bg-[#0A1410] px-4 py-2 text-[15px] leading-7 text-[#EAF7F1]'
-                    }
-                  >
-                    {m.text}
-                    {m.role === 'ai' && m.id === lastId && pending && m.options && m.options.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {m.options.map((op) => (
-                          <button key={op} onClick={() => answer(op)} className={chipCls}>
-                            {op}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {m.card ? (
+                    // 问题卡：深墨绿底 + 左侧 3px 亮绿竖条 + 编号小字 + 问题 + chips
+                    <div className="max-w-[92%] rounded-xl border border-[#1B3A2C] border-l-[3px] border-l-[#4ADE80] bg-[#0C1713] px-4 py-3">
+                      <p className="text-xs text-[#5E7A6C]">
+                        第 {m.card.no} 问 · {m.card.title}
+                      </p>
+                      <p className="mt-1.5 text-[15px] font-medium leading-7 text-[#EAF7F1]">{m.card.question}</p>
+                      {m.role === 'ai' && m.id === lastId && pending && m.options && m.options.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {m.options.map((op) => (
+                            <button key={op} onClick={() => answer(op)} className={chipCls}>
+                              {op}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : m.kind === 'notice' ? (
+                    // 通知行：一行小字 + 6px 亮绿圆点，不套气泡
+                    <div className="flex items-center gap-2 text-xs text-[#8FA69C]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#4ADE80]" />
+                      <span>{m.text}</span>
+                    </div>
+                  ) : (
+                    // 原有气泡渲染（用户气泡 / 普通 AI 消息）
+                    <div
+                      className={
+                        m.role === 'user'
+                          ? 'max-w-[58%] rounded-2xl rounded-br-sm bg-[#4ADE80] px-3.5 py-2 text-[15px] leading-7 text-[#06100B] shadow-sm'
+                          : 'max-w-[80%] rounded-2xl rounded-bl-sm border border-[#1B3A2C] bg-[#0A1410] px-4 py-2 text-[15px] leading-7 text-[#EAF7F1]'
+                      }
+                    >
+                      {m.text}
+                      {m.role === 'ai' && m.id === lastId && pending && m.options && m.options.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {m.options.map((op) => (
+                            <button key={op} onClick={() => answer(op)} className={chipCls}>
+                              {op}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
               {polishing && (
@@ -505,9 +544,9 @@ ${h.negative}
                   </div>
                 </div>
                 {[
-                  { label: '英文提示词', text: result.prompt_en },
-                  { label: '中文对照', text: result.prompt_zh },
-                  { label: '负面词 + 参数', text: `${result.negative}\nstyle: ${result.params.style}   ratio: ${result.params.ratio}` },
+                  { label: '英文提示词', text: result.prompt_en, mono: true },
+                  { label: '中文对照', text: result.prompt_zh, mono: false },
+                  { label: '负面词 + 参数', text: `${result.negative}\nstyle: ${result.params.style}   ratio: ${result.params.ratio}`, mono: false },
                 ].map((c) => (
                   <div key={c.label} className="rounded-lg border border-[#1B3A2C] bg-[#0A1410] p-3">
                     <div className="flex items-center justify-between">
@@ -516,7 +555,7 @@ ${h.negative}
                         {copied === c.label ? '已复制' : '复制'}
                       </button>
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap text-[15px] leading-7 text-[#EAF7F1]">{c.text}</p>
+                    <p className={`mt-1 whitespace-pre-wrap text-[15px] leading-7 text-[#EAF7F1] ${c.mono ? 'font-mono' : ''}`}>{c.text}</p>
                   </div>
                 ))}
               </div>
@@ -527,8 +566,20 @@ ${h.negative}
               </p>
             )}
 
-            {/* 底部：输入框 + 生成按钮 */}
+            {/* 底部：进度条 + 输入框 + 生成按钮 */}
             <div className="mt-4 border-t border-[#1B3A2C] pt-4">
+              {/* 进度条：从右栏挪到输入框上方 */}
+              <div className="mb-3">
+                <div className="h-1 rounded-full bg-[#16281F]">
+                  <div
+                    className="h-full rounded-full bg-[#4ADE80] transition-all duration-300"
+                    style={{ width: `${(answeredCount / ASK_ITEMS.length) * 100}%` }}
+                  />
+                </div>
+                {fullReady && (
+                  <p className="mt-1.5 text-xs font-medium text-[#4ADE80]">✓ 信息够了，可以出图了</p>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   className={inputCls}
@@ -589,32 +640,23 @@ ${h.negative}
           <aside className="sticky top-6 w-full shrink-0 rounded-2xl border border-[#1B3A2C] bg-[#0C1713] p-6 shadow-sm lg:w-[360px]">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-[#EAF7F1]">提示词草稿</h2>
-              {session && (
-                <button onClick={reset} className="cursor-pointer text-xs text-[#5E7A6C] transition hover:text-[#FB7185]">
-                  清空重来
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[#4ADE80]">{answeredCount}/{ASK_ITEMS.length}</span>
+                {session && (
+                  <button onClick={reset} className="cursor-pointer text-xs text-[#5E7A6C] transition hover:text-[#FB7185]">
+                    清空重来
+                  </button>
+                )}
+              </div>
             </div>
-
-            <p className="mt-2 text-xs text-[#8FA69C]">已完成 {answeredCount}/{ASK_ITEMS.length} 项</p>
-            <div className="mt-1 h-1.5 rounded-full bg-[#16281F]">
-              <div
-                className="h-full rounded-full bg-[#4ADE80] transition-all duration-300"
-                style={{ width: `${(answeredCount / ASK_ITEMS.length) * 100}%` }}
-              />
-            </div>
-            {fullReady && (
-              <p className="mt-2 text-xs font-medium text-[#4ADE80]">✓ 信息够了，可以出图了</p>
-            )}
 
             <div className="mt-4 space-y-3">
               {session && (
-                <div>
-                  <p className="flex items-center gap-1.5 text-xs font-medium text-[#8FA69C]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#4ADE80]" />
-                    开场描述
+                <div className="border-l-2 pl-3" style={{ borderLeftColor: '#4ADE80' }}>
+                  <p className="flex items-center gap-2 text-xs text-[#8FA69C]">
+                    <span>开场描述</span>
                   </p>
-                  <p className="mt-0.5 text-[15px] leading-7 text-[#EAF7F1]">{session.opening}</p>
+                  <p className="mt-1 text-[15px] leading-7 text-[#EAF7F1]">{session.opening}</p>
                 </div>
               )}
               {IMAGE_GUIDE.map((dim, i) => {
@@ -622,10 +664,13 @@ ${h.negative}
                 const isAuto = dim.key === 'detail' || dim.key === 'negative'
                 const autoText = dim.key === 'detail' ? '自动补全：细节丰富、高清' : dim.key === 'negative' ? '自动补全：默认负面词表' : ''
                 return (
-                  <div key={dim.key}>
-                    <p className="flex items-center gap-1.5 text-xs font-medium text-[#8FA69C]">
-                      <span className={`h-1.5 w-1.5 rounded-full ${ans ? 'bg-[#4ADE80]' : 'bg-[#1B3A2C]'}`} />
-                      {i + 1}. {dim.title}
+                  <div
+                    key={dim.key}
+                    className="border-l-2 pl-3"
+                    style={{ borderLeftColor: ans ? '#4ADE80' : '#1B3A2C', opacity: ans ? 1 : 0.5 }}
+                  >
+                    <p className="flex items-center gap-2 text-xs text-[#8FA69C]">
+                      <span>{i + 1}. {dim.title}</span>
                       {dim.tier === 'required' ? (
                         <span className="text-[10px] text-[#FB7185]">必填</span>
                       ) : dim.tier === 'recommended' ? (
@@ -634,8 +679,8 @@ ${h.negative}
                         <span className="text-[10px] text-[#5E7A6C]">默认</span>
                       )}
                     </p>
-                    <p className={`mt-0.5 text-[15px] leading-7 ${ans ? 'text-[#EAF7F1]' : 'text-[#5E7A6C]'}`}>
-                      {ans ?? (isAuto ? autoText : '— 待补充 —')}
+                    <p className={`mt-1 text-[15px] leading-7 ${ans ? 'text-[#EAF7F1]' : 'text-[#5E7A6C]'}`}>
+                      {ans ?? (isAuto ? autoText : '待补充')}
                     </p>
                   </div>
                 )
