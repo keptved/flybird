@@ -253,3 +253,27 @@ class OpenAICompatibleProvider:
             }
         except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
             raise RuntimeError(f"模型合成结果解析失败：{e}")
+
+    EXTRACT_PROMPT = (
+        "你是 AI 绘画引导员。用户开头说了一句大白话描述画面，请从这句话里抽取出以下 8 个维度中"
+        "已经能确定的字段：usage（用途）/ subject（主体）/ style（风格）/ scene（环境背景）/ "
+        "light（光线）/ color（色彩情绪）/ composition（构图视角）/ ratio（画幅比例）。\n"
+        "规则：\n"
+        "1）只返回能明确识别的维度；识别不出的维度**不要出现**在 JSON 里；\n"
+        "2）value 用大白话原文片段即可（例如 \"一只橘猫\"），不要过度加工；\n"
+        "3）如果某个维度句子里完全没提，就跳过；\n"
+        "4）只输出 JSON 对象，如 {\"subject\": \"一只橘猫\", \"scene\": \"窗台\", \"light\": \"午后阳光\"}，"
+        "不要输出任何其他内容。\n\n"
+        "用户起手句：{text}\n\nJSON："
+    )
+
+    def extract_image_fields(self, text: str) -> dict:
+        """LLM 版：让模型从起手句里抽出 8 个维度能确定的字段；解析失败返回空 dict"""
+        content = self._chat(self.EXTRACT_PROMPT.format(text=text), max_tokens=512)
+        try:
+            data = _parse_json_payload(content)
+            if isinstance(data, dict):
+                return {str(k): str(v) for k, v in data.items() if v}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+        return {}

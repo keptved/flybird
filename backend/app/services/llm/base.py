@@ -36,3 +36,8 @@ class LLMProvider(Protocol):
         """图片创作助手·合成：把全部答案按公式拼成最终提示词。
         返回 {"prompt_en": str, "prompt_zh": str, "negative": str}"""
         ...
+
+    def extract_image_fields(self, text: str) -> dict:
+        """图片创作助手·起手句抽取：从一句大白话中识别 8 个维度里能确定的字段。
+        返回 {key: value}，只包含能确定的；识别不出的维度不要出现。"""
+        ...

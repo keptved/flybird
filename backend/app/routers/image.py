@@ -84,3 +84,36 @@ def finalize(payload: FinalizeIn):
             negative=result.get("negative", ""),
             params={"style": payload.style, "ratio": payload.ratio},
         )
+
+
+class ExtractIn(BaseModel):
+    """起手句抽取请求体"""
+    text: str
+    model_id: int | None = None
+
+
+class ExtractOut(BaseModel):
+    """起手句抽取响应体：只包含能识别出的维度"""
+    fields: dict[str, str]
+
+
+@router.post("/extract", response_model=ExtractOut)
+def extract(payload: ExtractIn):
+    """从起手句中抽取 8 个维度里能识别的字段，用于跳过已答维度"""
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text 不能为空")
+
+    with Session(engine) as session:
+        config = None
+        if payload.model_id is not None:
+            config = session.get(ModelConfig, payload.model_id)
+            if not config:
+                raise HTTPException(status_code=404, detail="模型不存在")
+
+        provider = get_provider(config)
+        try:
+            fields = provider.extract_image_fields(text)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"模型调用失败：{e}")
+        return ExtractOut(fields=fields)

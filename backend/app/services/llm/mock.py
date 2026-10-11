@@ -240,3 +240,31 @@ class MockProvider:
             negative = self.DEFAULT_NEGATIVE
 
         return {"prompt_en": prompt_en, "prompt_zh": prompt_zh, "negative": negative}
+
+    # ---- 起手句维度抽取（mock 关键词版）----
+
+    # 各维度关键词 → 维度 key；命中的关键词原样作为答案（演示足够用）
+    EXTRACT_KEYWORDS: dict[str, list[str]] = {
+        "subject": ["猫", "狗", "女孩", "男孩", "女人", "男人", "女性", "男性", "老人", "小孩",
+                     "山", "海", "森林", "花", "树", "书桌", "咖啡", "杯子", "手机", "电脑",
+                     "建筑", "楼", "房子", "车", "鸟", "鱼"],
+        "style": ["写实", "摄影", "插画", "水彩", "3D", "水墨", "国风", "赛博朋克",
+                   "动漫", "吉卜力", "海报", "极简"],
+        "scene": ["室内", "户外", "街", "城市", "森林", "海边", "书房", "卧室", "窗台", "背景"],
+        "light": ["阳光", "晨光", "黄昏", "夕阳", "霓虹", "逆光", "侧光", "灯光", "月光",
+                   "黎明", "清晨", "中午"],
+        "color": ["暖色", "冷色", "黑白", "复古", "莫兰迪", "鲜艳", "高饱和", "低饱和"],
+        "composition": ["特写", "远景", "全景", "俯视", "仰拍", "平视", "鸟瞰"],
+    }
+
+    def extract_image_fields(self, text: str) -> dict:
+        """mock 关键词版：扫一遍起手句，命中维度关键词就预填；不做语义推理"""
+        result: dict[str, str] = {}
+        if not text:
+            return result
+        for key, words in self.EXTRACT_KEYWORDS.items():
+            for w in words:
+                if w in text:
+                    result[key] = text.strip()  # 用整句作为答案，保留上下文
+                    break
+        return result

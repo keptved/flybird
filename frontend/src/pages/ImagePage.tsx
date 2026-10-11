@@ -116,21 +116,68 @@ export default function ImagePage() {
   const complete = fullReady && COMPLETE_KEYS.every((k) => answeredKeys.includes(k))
   const canGenerate = minReady // 最低可出即解锁
 
-  // 起手
-  const start = () => {
+  // 起手：先调后端抽取起手句里能识别的维度并预填，再从第一个未答维度开始问
+  const start = async () => {
     const text = input.trim()
-    if (!text || session) return
-    const s: Session = { opening: text, answers: {}, raws: {}, followUpDone: {}, messages: [GREETING] }
-    s.messages.push({ id: s.messages.length, role: 'user', text })
-    s.messages.push({
-      id: s.messages.length,
-      role: 'ai',
-      text: '收到。我再按几个维度帮你补齐，一次只问一两个；不想答了就点底部「就这样，直接出」。',
-    })
-    const p = nextQuestion(s)
-    if (p) s.messages.push({ id: s.messages.length, role: 'ai', text: `第一问 · ${p.title}：${p.question}`, options: p.options })
-    setSession({ ...s })
+    if (!text || session || polishing) return
+    setPolishing(true)
     setInput('')
+
+    // 第一步：先抽取起手句里已经包含的维度（如"生成一只猫" → subject=一只猫）
+    let extracted: Record<string, string> = {}
+    try {
+      const res = await api.extractImageFields(text, modelId)
+      extracted = res.fields ?? {}
+    } catch {
+      extracted = {} // 抽取失败不影响流程，继续追问
+    }
+
+    const s: Session = {
+      opening: text,
+      answers: { ...extracted },
+      raws: { ...extracted },
+      followUpDone: {},
+      messages: [GREETING],
+    }
+    s.messages.push({ id: s.messages.length, role: 'user', text })
+
+    // 告诉用户已自动识别了哪些维度
+    const extractedKeys = Object.keys(extracted).filter((k) => extracted[k])
+    if (extractedKeys.length > 0) {
+      const names = extractedKeys
+        .map((k) => IMAGE_GUIDE.find((d) => d.key === k)?.title)
+        .filter(Boolean)
+        .join('、')
+      s.messages.push({
+        id: s.messages.length,
+        role: 'ai',
+        text: `我从你的话里识别出了 ${names}，已经自动填好，下面只问还缺的部分。`,
+      })
+    } else {
+      s.messages.push({
+        id: s.messages.length,
+        role: 'ai',
+        text: '收到。我再按几个维度帮你补齐，一次只问一两个；不想答了就点底部「就这样，直接出」。',
+      })
+    }
+
+    const p = nextQuestion(s)
+    if (p) {
+      s.messages.push({
+        id: s.messages.length,
+        role: 'ai',
+        text: `第一问 · ${p.title}：${p.question}`,
+        options: p.options,
+      })
+    } else {
+      s.messages.push({
+        id: s.messages.length,
+        role: 'ai',
+        text: '关键维度都齐了，点底部「✨ 生成提示词」即可合成。',
+      })
+    }
+    setSession({ ...s })
+    setPolishing(false)
   }
 
   // 回答当前问题
@@ -193,7 +240,13 @@ export default function ImagePage() {
     setPolishing(false)
   }
 
-  const submit = () => (session ? answer(input) : start())
+  const submit = async () => {
+    if (session) {
+      await answer(input)
+    } else {
+      await start()
+    }
+  }
 
   // 生成提示词（未答项用默认值补齐，不留空）
   const generate = async () => {
@@ -323,7 +376,7 @@ export default function ImagePage() {
               {polishing && (
                 <div className="flex justify-start">
                   <div className="rounded-2xl rounded-bl-sm border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-400 dark:border-emerald-900/40 dark:bg-slate-950/50 dark:text-slate-500">
-                    正在把回答润色成专业描述…
+                    {session ? '正在把回答润色成专业描述…' : '正在识别你描述里的关键信息…'}
                   </div>
                 </div>
               )}

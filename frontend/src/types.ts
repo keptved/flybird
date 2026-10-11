@@ -41,3 +41,8 @@ export interface ImageFinalizeResult {
   negative: string
   params: { style: string; ratio: string }
 }
+
+/** 图片创作助手 · 起手句维度抽取响应 */
+export interface ImageExtractResult {
+  fields: Record<string, string>
+}
