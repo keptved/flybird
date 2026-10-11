@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import init_db
-from .routers import inspirations, projects
+from .routers import consolidate, inspirations, models, projects
 
 app = FastAPI(title="灵感助手 API")
 
@@ -18,16 +18,21 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
-    """启动时建表，并保证存在一个默认项目"""
+    """启动时建表，并保证存在默认项目和内置 mock 模型"""
     init_db()
     from sqlmodel import Session, select
     from .db import engine
-    from .models import Project
+    from .models import ModelConfig, Project
     with Session(engine) as session:
-        exists = session.exec(select(Project)).first()
-        if not exists:
+        if not session.exec(select(Project)).first():
             session.add(Project(name="默认项目"))
-            session.commit()
+        if not session.exec(select(ModelConfig)).first():
+            session.add(ModelConfig(
+                name="Mock 规则清洗（无需 API）",
+                provider_type="mock",
+                is_builtin=True,
+            ))
+        session.commit()
 
 
 @app.get("/api/health")
@@ -37,3 +42,5 @@ def health():
 
 app.include_router(projects.router)
 app.include_router(inspirations.router)
+app.include_router(models.router)
+app.include_router(consolidate.router)

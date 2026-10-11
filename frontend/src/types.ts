@@ -11,3 +11,20 @@ export interface Inspiration {
   cleaned_text: string
   created_at: string
 }
+
+export interface ModelInfo {
+  id: number
+  name: string
+  provider_type: string
+  base_url: string
+  model: string
+  is_builtin: boolean
+  has_key: boolean
+}
+
+export interface ConsolidateResult {
+  project_id: number
+  original_count: number
+  merged_count: number
+  results: string[]
+}

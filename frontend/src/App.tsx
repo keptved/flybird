@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api/client'
+import ConsolidatePanel from './components/ConsolidatePanel'
 import InspirationList from './components/InspirationList'
+import ModelSelect from './components/ModelSelect'
 import ProjectSidebar from './components/ProjectSidebar'
-import type { Inspiration, Project } from './types'
+import type { ConsolidateResult, Inspiration, ModelInfo, Project } from './types'
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -12,6 +14,12 @@ function App() {
   const [latest, setLatest] = useState<Inspiration | null>(null)
   const [history, setHistory] = useState<Inspiration[]>([])
   const [error, setError] = useState('')
+  // 模型选择
+  const [models, setModels] = useState<ModelInfo[]>([])
+  const [modelId, setModelId] = useState<number | null>(null)
+  // 整合
+  const [consolidating, setConsolidating] = useState(false)
+  const [consolidated, setConsolidated] = useState<ConsolidateResult | null>(null)
 
   const currentProject = projects.find((p) => p.id === currentId) ?? null
 
@@ -20,7 +28,7 @@ function App() {
     api.listInspirations(projectId).then(setHistory).catch(() => setHistory([]))
   }, [])
 
-  // 初始化：加载项目列表
+  // 初始化：加载项目列表和模型列表
   useEffect(() => {
     api
       .listProjects()
@@ -32,12 +40,14 @@ function App() {
         }
       })
       .catch(() => setError('无法连接后端，请确认后端服务已启动（localhost:8000）'))
+    api.listModels().then(setModels).catch(() => {})
   }, [loadHistory])
 
   // 切换项目
   const handleSelect = (id: number) => {
     setCurrentId(id)
     setLatest(null)
+    setConsolidated(null)
     loadHistory(id)
   }
 
@@ -58,7 +68,7 @@ function App() {
     setLoading(true)
     setError('')
     try {
-      const result = await api.createInspiration(currentId, rawText.trim())
+      const result = await api.createInspiration(currentId, rawText.trim(), modelId)
       setLatest(result)
       setRawText('')
       loadHistory(currentId)
@@ -66,6 +76,20 @@ function App() {
       setError(e instanceof Error ? e.message : '清洗失败')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 整合当前项目灵感
+  const handleConsolidate = async () => {
+    if (!currentId || consolidating) return
+    setConsolidating(true)
+    setError('')
+    try {
+      setConsolidated(await api.consolidate(currentId, modelId))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '整合失败')
+    } finally {
+      setConsolidating(false)
     }
   }
 
@@ -95,7 +119,7 @@ function App() {
             onCreate={handleCreateProject}
           />
 
-          {/* 右侧：输入 + 对比 + 历史 */}
+          {/* 右侧：输入 + 对比 + 整合 + 历史 */}
           <main className="min-w-0 flex-1">
             <section className="rounded-xl border border-slate-200 bg-white p-5">
               <textarea
@@ -106,13 +130,21 @@ function App() {
               />
               <div className="mt-3 flex items-center justify-between">
                 <span className="text-xs text-slate-400">用大白话描述，不用管措辞</span>
-                <button
-                  onClick={handleClean}
-                  disabled={loading || !rawText.trim() || !currentId}
-                  className="rounded-lg bg-green-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  {loading ? '清洗中…' : '✨ 清洗灵感'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <ModelSelect
+                    models={models}
+                    value={modelId}
+                    onChange={setModelId}
+                    onModelsChange={setModels}
+                  />
+                  <button
+                    onClick={handleClean}
+                    disabled={loading || !rawText.trim() || !currentId}
+                    className="rounded-lg bg-green-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    {loading ? '清洗中…' : '✨ 清洗灵感'}
+                  </button>
+                </div>
               </div>
             </section>
 
@@ -138,10 +170,27 @@ function App() {
 
             {/* 历史记录 */}
             <section className="mt-8">
-              <h2 className="mb-3 text-sm font-semibold text-slate-700">
-                灵感记录（{history.length} 条）
-              </h2>
-              <InspirationList items={history} />
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-700">
+                  灵感记录（{history.length} 条）
+                </h2>
+                <button
+                  onClick={handleConsolidate}
+                  disabled={consolidating || history.length < 2}
+                  className="rounded-lg border border-green-500 px-4 py-1.5 text-sm font-medium text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                  title={history.length < 2 ? '至少 2 条灵感才能整合' : '去重合并当前项目的所有灵感'}
+                >
+                  {consolidating ? '整合中…' : '🧩 整合灵感'}
+                </button>
+              </div>
+              <ConsolidatePanel
+                result={consolidated}
+                loading={consolidating}
+                onClose={() => setConsolidated(null)}
+              />
+              <div className="mt-3">
+                <InspirationList items={history} />
+              </div>
             </section>
           </main>
         </div>

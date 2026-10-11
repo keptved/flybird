@@ -1,25 +1,20 @@
-"""LLM Provider 工厂：按 .env 的 LLM_PROVIDER 返回对应实现"""
-import os
-
-from dotenv import load_dotenv
-
+"""LLM Provider 工厂：按模型配置返回对应实现"""
+from ...models import ModelConfig
 from .base import LLMProvider
+from .deepseek import OpenAICompatibleProvider
 from .mock import MockProvider
 
-# 加载 backend/.env
-load_dotenv()
 
+def get_provider(config: ModelConfig | None = None) -> LLMProvider:
+    """返回 provider 实例。
 
-def get_provider() -> LLMProvider:
-    """读取 LLM_PROVIDER 环境变量，返回对应 provider 实例。
-
-    - mock（默认）：规则清洗，无需 API key
-    - deepseek：DeepSeek API，需要 DEEPSEEK_API_KEY
+    - config 为 None 或 provider_type=mock：返回 mock 规则清洗（默认兜底）
+    - provider_type=openai：返回 OpenAI 兼容端点 provider
     """
-    provider = os.getenv("LLM_PROVIDER", "mock").strip().lower()
-
-    if provider == "deepseek":
-        from .deepseek import DeepSeekProvider
-        return DeepSeekProvider()
-
-    return MockProvider()
+    if config is None or config.provider_type == "mock":
+        return MockProvider()
+    return OpenAICompatibleProvider(
+        api_key=config.api_key,
+        base_url=config.base_url,
+        model=config.model,
+    )

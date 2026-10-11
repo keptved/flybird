@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..db import engine
-from ..models import Inspiration, Project
+from ..models import Inspiration, ModelConfig, Project
 from ..services.llm.factory import get_provider
 
 router = APIRouter(prefix="/api", tags=["inspirations"])
@@ -16,6 +16,7 @@ class InspirationCreate(BaseModel):
     """创建灵感的请求体"""
     project_id: int
     raw_text: str
+    model_id: int | None = None   # 指定清洗用模型；不指定则 mock
 
 
 class InspirationOut(BaseModel):
@@ -40,9 +41,18 @@ def create_inspiration(payload: InspirationCreate):
         if not project:
             raise HTTPException(status_code=404, detail="项目不存在")
 
-        # 调用 LLM provider 清洗
-        provider = get_provider()
-        cleaned = provider.clean(raw)
+        # 解析模型配置并调用 provider 清洗
+        config = None
+        if payload.model_id is not None:
+            config = session.get(ModelConfig, payload.model_id)
+            if not config:
+                raise HTTPException(status_code=404, detail="模型不存在")
+
+        provider = get_provider(config)
+        try:
+            cleaned = provider.clean(raw)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"模型调用失败：{e}")
 
         record = Inspiration(
             project_id=payload.project_id,
