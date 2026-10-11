@@ -12,7 +12,7 @@ function App() {
   const [currentId, setCurrentId] = useState<number | null>(null)
   const [rawText, setRawText] = useState('')
   const [loading, setLoading] = useState(false)
-  const [latest, setLatest] = useState<Inspiration | null>(null)
+  const [latest, setLatest] = useState<Inspiration[] | null>(null)
   const [history, setHistory] = useState<Inspiration[]>([])
   const [error, setError] = useState('')
   // 模型选择
@@ -23,11 +23,6 @@ function App() {
   const [consolidated, setConsolidated] = useState<ConsolidateResult | null>(null)
   // 主题：默认暗色（黑绿基调）
   const [dark, setDark] = useState(true)
-  // 导出弹窗：可选的提示词上下文（记住本次填写，方便二次导出微调）
-  const [showExport, setShowExport] = useState(false)
-  const [expBackground, setExpBackground] = useState('')
-  const [expGoal, setExpGoal] = useState('')
-  const [expConstraints, setExpConstraints] = useState('')
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
@@ -161,7 +156,7 @@ function App() {
     }
   }
 
-  // 导出 MD：有整合结果导整合版，否则导全部清洗后灵感
+  // 导出 MD：直接导出，背景/目标/约束由后端 AI 自动分析生成
   const handleExport = async () => {
     if (!currentId || exporting) return
     setExporting(true)
@@ -169,8 +164,7 @@ function App() {
     try {
       const items = consolidated ? consolidated.results : history.map((h) => h.cleaned_text)
       const suffix = consolidated ? '（整合版）' : ''
-      await api.exportMd(currentId, items, suffix, expBackground, expGoal, expConstraints)
-      setShowExport(false)
+      await api.exportMd(currentId, items, suffix, modelId)
     } catch (e) {
       setError(e instanceof Error ? e.message : '导出失败')
     } finally {
@@ -257,18 +251,31 @@ function App() {
               </div>
             </section>
 
-            {/* 清洗前后对比 */}
-            {latest && (
+            {/* 清洗前后对比（一次可能清洗出多条） */}
+            {latest && latest.length > 0 && (
               <section className="mt-6">
                 <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-3">
                   <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-emerald-900/40 dark:bg-slate-900/80">
                     <p className="mb-2 text-xs font-medium text-slate-400 dark:text-slate-500">清洗前（原文）</p>
-                    <p className="text-sm leading-6 text-slate-700 dark:text-slate-300">{latest.raw_text}</p>
+                    <p className="text-sm leading-6 text-slate-700 dark:text-slate-300">{latest[0].raw_text}</p>
                   </div>
                   <div className="self-center text-xl text-slate-300 dark:text-emerald-600">→</div>
                   <div className="rounded-2xl border-2 border-green-500 bg-white p-5 shadow-md shadow-green-500/10 dark:border-emerald-500 dark:bg-slate-900 dark:shadow-emerald-500/20">
-                    <p className="mb-2 text-xs font-medium text-green-700 dark:text-emerald-400">清洗后（精炼文本）</p>
-                    <p className="text-sm leading-6 text-slate-800 dark:text-slate-100">{latest.cleaned_text}</p>
+                    <p className="mb-2 text-xs font-medium text-green-700 dark:text-emerald-400">
+                      清洗后（精炼文本{latest.length > 1 ? ` · 拆出 ${latest.length} 条` : ''}）
+                    </p>
+                    {latest.length === 1 ? (
+                      <p className="text-sm leading-6 text-slate-800 dark:text-slate-100">{latest[0].cleaned_text}</p>
+                    ) : (
+                      <ol className="space-y-2">
+                        {latest.map((item, i) => (
+                          <li key={item.id} className="flex gap-2 text-sm leading-6 text-slate-800 dark:text-slate-100">
+                            <span className="shrink-0 font-semibold text-green-600 dark:text-emerald-400">{i + 1}.</span>
+                            {item.cleaned_text}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
                 <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
@@ -285,12 +292,12 @@ function App() {
                 </h2>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setShowExport(true)}
-                    disabled={history.length === 0}
+                    onClick={handleExport}
+                    disabled={history.length === 0 || exporting}
                     className="cursor-pointer rounded-xl border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:shadow-none dark:border-emerald-900/60 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:disabled:border-slate-800 dark:disabled:text-slate-600"
                     title={consolidated ? '导出整合后的结果' : '导出全部清洗后的灵感'}
                   >
-                    ⬇ 导出 MD
+                    {exporting ? '导出中…' : '⬇ 导出 MD'}
                   </button>
                   <button
                     onClick={handleConsolidate}
@@ -318,65 +325,6 @@ function App() {
           </main>
         </div>
       </div>
-
-      {/* 导出弹窗：填写可选的提示词上下文，居中显示 */}
-      {showExport && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm dark:bg-black/60"
-          onClick={() => setShowExport(false)}
-        >
-          <div
-            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:border dark:border-emerald-900/50 dark:bg-slate-900"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="mb-1 text-base font-semibold text-slate-800 dark:text-slate-100">
-              导出提示词文件
-            </h3>
-            <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
-              导出的 MD 自带六段提示词结构，可直接投喂给大模型
-            </p>
-
-            <div className="space-y-3">
-              {([
-                ['项目背景', expBackground, setExpBackground, '例如：这是一个面向学生的校园工具，预算为零…'],
-                ['核心目标', expGoal, setExpGoal, '例如：做出一个能跑的 MVP，两周内上线试用…'],
-                ['约束条件', expConstraints, setExpConstraints, '例如：优先免费方案；交互零学习成本（一行一条）…'],
-              ] as const).map(([label, val, setVal, ph]) => (
-                <div key={label}>
-                  <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
-                    {label}
-                    <span className="ml-2 font-normal text-slate-400 dark:text-slate-500">
-                      不填则使用默认文案
-                    </span>
-                  </label>
-                  <textarea
-                    className="min-h-16 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100 dark:border-emerald-900/50 dark:bg-slate-950/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20"
-                    placeholder={ph}
-                    value={val}
-                    onChange={(e) => setVal(e.target.value)}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 flex gap-2">
-              <button
-                onClick={() => setShowExport(false)}
-                className="flex-1 cursor-pointer rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleExport}
-                disabled={exporting}
-                className="flex-1 cursor-pointer rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 px-3 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-500/25 transition hover:from-emerald-400 hover:to-green-400 active:scale-95 disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none"
-              >
-                {exporting ? '导出中…' : '⬇ 导出 MD'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

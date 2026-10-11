@@ -42,6 +42,31 @@ class MockProvider:
 
         return cleaned if cleaned else text.strip()
 
+    def clean_many(self, text: str) -> list[str]:
+        """规则拆分：按换行/句号/分号等切成若干条，逐条清洗，过滤碎片并去重。
+        一段大白话里夹杂多个想法时，mock 也能拆出多条灵感。"""
+        # 先整体清洗去口水词，再按强分隔符拆分
+        cleaned = self.clean(text)
+        parts = re.split(r"[\n；;]+|(?<=。)|(?<=！)|(?<=！)|(?<=？)", cleaned)
+        items: list[str] = []
+        for p in parts:
+            p = p.strip().strip("，,。！？；;、 ")
+            # 太短的碎片（<6 字）跳过，避免语气词单独成条
+            if len(p) >= 6 and p not in items:
+                items.append(p)
+        return items if items else [cleaned]
+
+    def analyze_context(self, project_name: str, items: list[str]) -> dict:
+        """规则生成导出上下文：基于项目名和首条灵感做保守推断"""
+        return {
+            "background": (
+                f"本项目「{project_name}」由 {len(items)} 条灵感经清洗、去重、整合沉淀而成，\n"
+                "记录了一个产品构想的完整需求脉络。"
+            ),
+            "goal": items[0] if items else "将下方需求清单落实为一个具体可用的成果。",
+            "constraints": "优先简单可落地的方案，避免过度设计\n面向普通用户，交互要零学习成本\n优先使用成熟、免费的技术方案",
+        }
+
     def consolidate(self, texts: list[str]) -> list[str]:
         """去重合并：用 difflib 相似度 > 0.7 的条目合并，保留更长/更完整的表述"""
         if not texts:

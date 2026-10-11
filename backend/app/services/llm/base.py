@@ -13,6 +13,16 @@ class LLMProvider(Protocol):
         """把大白话灵感清洗成精炼文本"""
         ...
 
+    def clean_many(self, text: str) -> list[str]:
+        """清洗一段大白话：若其中包含多条想法/方向，拆成多条精炼灵感返回。
+        默认实现：只清洗不拆分，返回单元素列表。"""
+        return [self.clean(text)]
+
     def consolidate(self, texts: list[str]) -> list[str]:
         """把同一项目的多条灵感去重合并，返回合并后的条目列表"""
+        ...
+
+    def analyze_context(self, project_name: str, items: list[str]) -> dict:
+        """根据项目名和灵感清单，自动分析生成导出用的背景/目标/约束。
+        返回 {"background": str, "goal": str, "constraints": str}，constraints 为多行文本。"""
         ...

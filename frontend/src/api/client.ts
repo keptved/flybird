@@ -24,9 +24,9 @@ export const api = {
   deleteProject: (id: number) =>
     request<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
 
-  // 灵感
+  // 灵感（一次清洗可能拆成多条）
   createInspiration: (project_id: number, raw_text: string, model_id: number | null) =>
-    request<Inspiration>('/api/inspirations', {
+    request<Inspiration[]>('/api/inspirations', {
       method: 'POST',
       body: JSON.stringify({ project_id, raw_text, model_id }),
     }),
@@ -59,19 +59,17 @@ export const api = {
       body: JSON.stringify({ model_id }),
     }),
 
-  // 导出 MD（返回文件流，前端触发下载；支持可选的提示词上下文字段）
+  // 导出 MD（返回文件流，前端触发下载；背景/目标/约束由后端 AI 自动分析生成）
   exportMd: async (
     projectId: number,
     items: string[],
     titleSuffix: string,
-    background = '',
-    goal = '',
-    constraints = '',
+    modelId: number | null,
   ) => {
     const resp = await fetch(`${BASE_URL}/api/projects/${projectId}/export.md`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items, title_suffix: titleSuffix, background, goal, constraints }),
+      body: JSON.stringify({ items, title_suffix: titleSuffix, model_id: modelId }),
     })
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ detail: resp.statusText }))

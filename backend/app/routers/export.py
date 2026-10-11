@@ -7,7 +7,9 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from ..db import engine
-from ..models import Project
+from ..models import ModelConfig, Project
+from ..services.llm.factory import get_provider
+from ..services.llm.mock import MockProvider
 
 router = APIRouter(prefix="/api", tags=["export"])
 
@@ -25,12 +27,13 @@ DEFAULT_CONSTRAINTS = [
 
 
 class ExportRequest(BaseModel):
-    """导出请求体：前端传入要导出的条目 + 可选的提示词上下文字段"""
+    """导出请求体：前端传入要导出的条目；背景/目标/约束不填则由 AI 自动分析生成"""
     items: list[str]
-    title_suffix: str = ""      # 如 "（整合版）"
-    background: str = ""        # 项目背景
-    goal: str = ""              # 核心目标
-    constraints: str = ""       # 约束条件（多行，一行一条）
+    title_suffix: str = ""          # 如 "（整合版）"
+    model_id: int | None = None     # 分析用模型；不指定则 mock 规则分析
+    background: str = ""            # 项目背景（手动指定优先）
+    goal: str = ""                  # 核心目标
+    constraints: str = ""           # 约束条件（多行，一行一条）
 
 
 @router.post("/projects/{project_id}/export.md")
@@ -45,11 +48,29 @@ def export_markdown(project_id: int, payload: ExportRequest):
     if not items:
         raise HTTPException(status_code=400, detail="没有可导出的内容")
 
-    background = payload.background.strip() or DEFAULT_BACKGROUND
-    goal = payload.goal.strip() or DEFAULT_GOAL
-    if payload.constraints.strip():
-        # 用户填的约束按行拆分，逐条列出
-        constraints = [l.strip() for l in payload.constraints.strip().splitlines() if l.strip()]
+    # 用户没填的字段：优先让选中的模型分析生成，失败则回退 mock 规则
+    background = payload.background.strip()
+    goal = payload.goal.strip()
+    constraints_text = payload.constraints.strip()
+    if not (background and goal and constraints_text):
+        analyzed = {"background": "", "goal": "", "constraints": ""}
+        with Session(engine) as session:
+            config = session.get(ModelConfig, payload.model_id) if payload.model_id else None
+        if config:
+            try:
+                analyzed = get_provider(config).analyze_context(project.name, items)
+            except Exception:
+                analyzed = {}  # 模型分析失败不阻塞导出，走 mock 兜底
+        if not analyzed:
+            analyzed = {}
+        mock_defaults = MockProvider().analyze_context(project.name, items)
+        background = background or analyzed.get("background") or mock_defaults["background"]
+        goal = goal or analyzed.get("goal") or mock_defaults["goal"]
+        constraints_text = constraints_text or analyzed.get("constraints") or mock_defaults["constraints"]
+
+    if constraints_text:
+        # 约束按行拆分，逐条列出
+        constraints = [l.strip() for l in constraints_text.splitlines() if l.strip()]
     else:
         constraints = DEFAULT_CONSTRAINTS
 

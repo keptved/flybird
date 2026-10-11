@@ -28,9 +28,9 @@ class InspirationOut(BaseModel):
     created_at: datetime
 
 
-@router.post("/inspirations", response_model=InspirationOut)
+@router.post("/inspirations", response_model=list[InspirationOut])
 def create_inspiration(payload: InspirationCreate):
-    """提交大白话 → 清洗 → 存库 → 返回前后对比"""
+    """提交大白话 → 清洗（可能拆成多条）→ 存库 → 返回清洗出的灵感列表"""
     raw = payload.raw_text.strip()
     if not raw:
         raise HTTPException(status_code=400, detail="灵感内容不能为空")
@@ -50,19 +50,23 @@ def create_inspiration(payload: InspirationCreate):
 
         provider = get_provider(config)
         try:
-            cleaned = provider.clean(raw)
+            cleaned_items = provider.clean_many(raw)
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"模型调用失败：{e}")
 
-        record = Inspiration(
-            project_id=payload.project_id,
-            raw_text=raw,
-            cleaned_text=cleaned,
-        )
-        session.add(record)
+        records = []
+        for cleaned in cleaned_items:
+            record = Inspiration(
+                project_id=payload.project_id,
+                raw_text=raw,
+                cleaned_text=cleaned,
+            )
+            session.add(record)
+            records.append(record)
         session.commit()
-        session.refresh(record)
-        return record
+        for r in records:
+            session.refresh(r)
+        return records
 
 
 @router.get("/projects/{project_id}/inspirations", response_model=list[InspirationOut])

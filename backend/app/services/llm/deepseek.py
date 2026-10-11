@@ -1,4 +1,5 @@
 """OpenAI 兼容端点清洗器：适用于 DeepSeek / Moonshot / 通义等兼容服务"""
+import json
 import re
 
 import httpx
@@ -17,6 +18,40 @@ CONSOLIDATE_PROMPT = (
     "保留更完整清晰的表述。只输出合并后的列表，每条一行，用数字编号。\n\n"
     "{joined}\n\n合并结果："
 )
+
+CLEAN_MANY_PROMPT = (
+    "你是一位文本精炼专家。用户发来一段大白话灵感，其中可能包含多条想法或方向。\n"
+    "请你：\n"
+    "1）识别出其中每一条独立的想法/方向\n"
+    "2）每条分别清洗成精炼文本（去口语填充词、保留核心语义、语言简洁）\n"
+    "3）语义高度重复的合并为一条\n"
+    "只输出 JSON 字符串数组，如 [\"想法一\", \"想法二\"]，不要输出任何其他内容。\n\n"
+    "原始灵感：{text}\n\nJSON 数组："
+)
+
+ANALYZE_PROMPT = (
+    "你是产品经理助手。以下是项目「{project_name}」沉淀的需求灵感清单：\n\n"
+    "{joined}\n\n"
+    "请基于这些灵感，分析并输出该项目的背景、核心目标和约束条件。\n"
+    "只输出 JSON 对象，格式为：\n"
+    "{{\"background\": \"一两句话的项目背景\", \"goal\": \"一句话核心目标\", "
+    "\"constraints\": \"约束条件，多条之间用换行分隔\"}}\n"
+    "不要输出任何其他内容。"
+)
+
+
+def _parse_json_payload(content: str):
+    """从模型输出中提取 JSON（容忍 ```json 代码块包裹）"""
+    text = content.strip()
+    m = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
+    if m:
+        text = m.group(1).strip()
+    # 截取第一个 [ 或 { 到最后一个 ] 或 } 之间的内容
+    start = min([i for i in (text.find("["), text.find("{")) if i != -1], default=-1)
+    end = max(text.rfind("]"), text.rfind("}"))
+    if start != -1 and end != -1 and end > start:
+        text = text[start : end + 1]
+    return json.loads(text)
 
 
 class OpenAICompatibleProvider:
@@ -116,6 +151,37 @@ class OpenAICompatibleProvider:
 
     def clean(self, text: str) -> str:
         return self._chat(CLEAN_PROMPT.format(text=text), max_tokens=512)
+
+    def clean_many(self, text: str) -> list[str]:
+        """清洗并拆分多条想法：模型返回 JSON 数组；解析失败时退化为单条清洗"""
+        content = self._chat(CLEAN_MANY_PROMPT.format(text=text), max_tokens=1024)
+        try:
+            items = _parse_json_payload(content)
+            result = [str(t).strip() for t in items if str(t).strip()]
+            if result:
+                return result
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+        # 兜底：模型没按格式输出时，按单条清洗逻辑处理
+        return [self.clean(text)]
+
+    def analyze_context(self, project_name: str, items: list[str]) -> dict:
+        """让模型基于灵感清单自动生成导出的背景/目标/约束"""
+        joined = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(items))
+        content = self._chat(
+            ANALYZE_PROMPT.format(project_name=project_name, joined=joined),
+            max_tokens=1024,
+        )
+        try:
+            data = _parse_json_payload(content)
+            return {
+                "background": str(data.get("background") or "").strip(),
+                "goal": str(data.get("goal") or "").strip(),
+                "constraints": str(data.get("constraints") or "").strip(),
+            }
+        except (json.JSONDecodeError, TypeError, ValueError, AttributeError):
+            # 解析失败返回空，由导出层使用默认文案兜底
+            return {"background": "", "goal": "", "constraints": ""}
 
     def consolidate(self, texts: list[str]) -> list[str]:
         if not texts:
