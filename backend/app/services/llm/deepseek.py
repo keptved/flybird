@@ -33,22 +33,58 @@ class OpenAICompatibleProvider:
     def _chat(self, prompt: str, max_tokens: int = 512) -> str:
         """发起一次 chat completion 调用，返回文本内容。
 
-        出错时抛出带中文定位信息的 RuntimeError：
-        网络层（连不上/超时）、认证层（key 无效）、参数层（模型名错误）、额度层（限流）。
+        要点：
+        - 默认关闭 thinking（LongCat 2.5 等思考模型不关会把 max_tokens 全耗在思考上）
+        - 若平台不认识 thinking 参数（400 + 相关错误信息），自动去掉该参数重发一次
+        - 解析兜底：content 为空且存在 reasoning_content 时给出明确提示，不抛 KeyError
         """
+        body = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.3,
+            "max_tokens": max_tokens,
+            # 关闭思考模式，保证返回里有 content
+            "thinking": {"type": "disabled"},
+        }
+
+        resp = self._post(body)
+
+        # 兜底：平台不认识 thinking 参数时去掉重发
+        if resp.status_code == 400:
+            try:
+                err_msg = resp.json().get("error", {}).get("message", "")
+            except Exception:
+                err_msg = resp.text[:200]
+            hint = (err_msg or "").lower()
+            if "thinking" in hint or "unknown parameter" in hint or "unrecognized" in hint:
+                body.pop("thinking", None)
+                resp = self._post(body)
+
+        if resp.status_code != 200:
+            self._raise_friendly(resp)
+
+        data = resp.json()
+        message = data["choices"][0].get("message", {})
+        content = message.get("content") or ""
+        if not content.strip():
+            if message.get("reasoning_content"):
+                raise RuntimeError(
+                    "模型把额度花在了思考上（返回只有 reasoning_content 没有正文），"
+                    "请关闭 thinking 或调大 max_tokens"
+                )
+            raise RuntimeError("接口返回为空：message 中没有 content 字段")
+        return content.strip()
+
+    def _post(self, body: dict) -> httpx.Response:
+        """发送请求，网络层错误转成中文提示"""
         try:
-            resp = httpx.post(
+            return httpx.post(
                 f"{self.base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.3,
-                    "max_tokens": max_tokens,
-                },
+                json=body,
                 timeout=60.0,
             )
         except httpx.ConnectError:
@@ -58,28 +94,25 @@ class OpenAICompatibleProvider:
         except httpx.TimeoutException:
             raise RuntimeError("网络错误：请求超时（60 秒），接口响应太慢或网络不稳定")
 
-        if resp.status_code != 200:
-            # 尝试解析接口返回的错误信息
-            try:
-                err_msg = resp.json().get("error", {}).get("message", resp.text[:200])
-            except Exception:
-                err_msg = resp.text[:200]
+    def _raise_friendly(self, resp: httpx.Response) -> None:
+        """按状态码抛出带定位信息的中文错误"""
+        try:
+            err_msg = resp.json().get("error", {}).get("message", resp.text[:200])
+        except Exception:
+            err_msg = resp.text[:200]
 
-            if resp.status_code in (401, 403):
-                raise RuntimeError(f"认证失败：API Key 无效或已过期（{err_msg}）")
-            if resp.status_code == 404:
-                raise RuntimeError(
-                    f"模型名错误：「{self.model}」在该平台不存在（{err_msg}），"
-                    "请检查模型名拼写，例如 DeepSeek 应填 deepseek-chat"
-                )
-            if resp.status_code == 402:
-                raise RuntimeError(f"余额不足：该平台账户没有可用额度（{err_msg}），请前往平台充值或领取额度")
-            if resp.status_code == 429:
-                raise RuntimeError(f"额度问题：触发限流或余额不足（{err_msg}）")
-            raise RuntimeError(f"接口返回错误 {resp.status_code}：{err_msg}")
-
-        data = resp.json()
-        return data["choices"][0]["message"]["content"].strip()
+        if resp.status_code in (401, 403):
+            raise RuntimeError(f"认证失败：API Key 无效或已过期（{err_msg}）")
+        if resp.status_code == 404:
+            raise RuntimeError(
+                f"模型名错误：「{self.model}」在该平台不存在（{err_msg}），"
+                "请检查模型名拼写，例如 DeepSeek 应填 deepseek-chat"
+            )
+        if resp.status_code == 402:
+            raise RuntimeError(f"余额不足：该平台账户没有可用额度（{err_msg}），请前往平台充值或领取额度")
+        if resp.status_code == 429:
+            raise RuntimeError(f"额度问题：触发限流或余额不足（{err_msg}）")
+        raise RuntimeError(f"接口返回错误 {resp.status_code}：{err_msg}")
 
     def clean(self, text: str) -> str:
         return self._chat(CLEAN_PROMPT.format(text=text), max_tokens=512)
