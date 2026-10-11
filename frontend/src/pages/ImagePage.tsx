@@ -10,7 +10,6 @@ import {
   MIN_READY_KEYS,
   USAGE_TO_RATIO,
 } from '../data/imageGuide'
-import { useTheme } from '../hooks/useTheme'
 import type { ImageFinalizeResult, ImageHistoryItem, ModelInfo } from '../types'
 
 /** 聊天消息：AI 消息可带选项 chips */
@@ -84,7 +83,6 @@ function normRatio(v: string): string {
 
 /** 图片创作助手：多轮引导 → 边问边攒 → 一键合成 */
 export default function ImagePage() {
-  const { dark, toggle } = useTheme()
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelId, setModelId] = useState<number | null>(null)
   const [session, setSession] = useState<Session | null>(loadSession)
@@ -430,55 +428,48 @@ ${h.negative}
   }
 
   const inputCls =
-    'min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100 dark:border-emerald-900/50 dark:bg-slate-950/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20'
+    'min-w-0 flex-1 rounded-xl border border-[#1B3A2C] bg-[#0A1410] px-3 py-2 text-[15px] text-[#EAF7F1] outline-none transition placeholder-[#5E7A6C] focus:border-[#4ADE80] focus:ring-2 focus:ring-[#4ADE80]/20'
 
   const chipCls =
-    'cursor-pointer rounded-full border border-emerald-300 px-3 py-1 text-xs text-emerald-700 transition hover:bg-emerald-50 active:scale-95 dark:border-emerald-700/60 dark:text-emerald-300 dark:hover:bg-emerald-500/10'
+    'cursor-pointer rounded-full border border-[#1B3A2C] bg-[#0A1410] px-3 py-1 text-xs text-[#4ADE80] transition hover:bg-[#4ADE80]/10 active:scale-95'
 
   return (
-    <div className="min-h-full bg-slate-50 transition-colors duration-300 dark:bg-[#0a0f0c]">
-      <div className="mx-auto max-w-6xl px-6 py-8">
+    <div className="min-h-full bg-[#06100B]">
+      <div className="mx-auto max-w-[1400px] px-6 py-8">
         {/* 顶栏 */}
-        <header className="flex items-center gap-3 border-b border-slate-200 pb-4 dark:border-emerald-900/40">
+        <header className="flex items-center gap-3 border-b border-[#1B3A2C] pb-4">
           <a
             href="#/"
             title="返回飞鸟主界面"
-            className="cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500 shadow-sm transition hover:bg-slate-50 dark:border-emerald-900/50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800"
+            className="cursor-pointer rounded-full border border-[#1B3A2C] bg-[#0C1713] px-3 py-1 text-xs font-medium text-[#8FA69C] shadow-sm transition hover:bg-[#0A1410]"
           >
             ← 返回
           </a>
           <Logo size={36} />
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <h1 className="bg-gradient-to-r from-emerald-600 to-green-500 bg-clip-text text-2xl font-bold text-transparent dark:from-emerald-400 dark:to-green-300">
+            <h1 className="text-2xl font-bold text-[#4ADE80]">
               图片创作助手
             </h1>
-            <span className="text-xs font-medium tracking-wide text-slate-400 dark:text-slate-500">
+            <span className="text-xs font-medium tracking-wide text-[#5E7A6C]">
               把脑海里的画面，问清楚、写明白
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <ModelSelect models={models} value={modelId} onChange={setModelId} onModelsChange={setModels} />
-            <button
-              onClick={toggle}
-              title={dark ? '切换到亮色模式' : '切换到暗色模式'}
-              className="cursor-pointer rounded-full border border-slate-200 bg-white p-2 text-sm shadow-sm transition hover:scale-110 dark:border-emerald-900/50 dark:bg-slate-900"
-            >
-              {dark ? '☀️' : '🌙'}
-            </button>
           </div>
         </header>
 
         <div className="mt-6 flex flex-col items-start gap-6 lg:flex-row">
           {/* 左栏 · 对话流 */}
-          <section className="w-full min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-emerald-900/40 dark:bg-slate-900/80">
+          <section className="w-full min-w-0 flex-1 rounded-2xl border border-[#1B3A2C] bg-[#0C1713] p-6 shadow-sm">
             <div className="space-y-3">
               {messages.map((m) => (
                 <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div
                     className={
                       m.role === 'user'
-                        ? 'max-w-[80%] rounded-2xl rounded-br-sm bg-gradient-to-r from-emerald-500 to-green-500 px-4 py-2 text-sm leading-6 text-white shadow-sm'
-                        : 'max-w-[80%] rounded-2xl rounded-bl-sm border border-slate-200 bg-slate-50 px-4 py-2 text-sm leading-6 text-slate-700 dark:border-emerald-900/40 dark:bg-slate-950/50 dark:text-slate-200'
+                        ? 'max-w-[80%] rounded-2xl rounded-br-sm bg-[#4ADE80] px-4 py-2 text-[15px] leading-7 text-[#06100B] shadow-sm'
+                        : 'max-w-[80%] rounded-2xl rounded-bl-sm border border-[#1B3A2C] bg-[#0A1410] px-4 py-2 text-[15px] leading-7 text-[#EAF7F1]'
                     }
                   >
                     {m.text}
@@ -496,7 +487,7 @@ ${h.negative}
               ))}
               {polishing && (
                 <div className="flex justify-start">
-                  <div className="rounded-2xl rounded-bl-sm border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-400 dark:border-emerald-900/40 dark:bg-slate-950/50 dark:text-slate-500">
+                  <div className="rounded-2xl rounded-bl-sm border border-[#1B3A2C] bg-[#0A1410] px-4 py-2 text-[15px] text-[#5E7A6C]">
                     {session ? '正在把回答润色成专业描述…' : '正在识别你描述里的关键信息…'}
                   </div>
                 </div>
@@ -505,9 +496,9 @@ ${h.negative}
 
             {/* 结果卡 */}
             {result && (
-              <div className="mt-4 space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+              <div className="mt-4 space-y-3 rounded-xl border border-[#1B3A2C] bg-[#0C1713] p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">已生成 · 可投喂生图 AI</p>
+                  <p className="text-sm font-semibold text-[#4ADE80]">已生成 · 可投喂生图 AI</p>
                   <div className="flex gap-2">
                     <button onClick={copyAll} className={chipCls}>{copied === '全部' ? '已复制' : '复制全部'}</button>
                     <button onClick={exportMd} className={chipCls}>导出 .md</button>
@@ -518,26 +509,26 @@ ${h.negative}
                   { label: '中文对照', text: result.prompt_zh },
                   { label: '负面词 + 参数', text: `${result.negative}\nstyle: ${result.params.style}   ratio: ${result.params.ratio}` },
                 ].map((c) => (
-                  <div key={c.label} className="rounded-lg border border-slate-200 bg-white p-3 dark:border-emerald-900/40 dark:bg-slate-900/60">
+                  <div key={c.label} className="rounded-lg border border-[#1B3A2C] bg-[#0A1410] p-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{c.label}</p>
-                      <button onClick={() => copy(c.label, c.text)} className="cursor-pointer text-xs text-emerald-600 hover:underline dark:text-emerald-400">
+                      <p className="text-xs font-medium text-[#8FA69C]">{c.label}</p>
+                      <button onClick={() => copy(c.label, c.text)} className="cursor-pointer text-xs text-[#4ADE80] hover:underline">
                         {copied === c.label ? '已复制' : '复制'}
                       </button>
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">{c.text}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-[15px] leading-7 text-[#EAF7F1]">{c.text}</p>
                   </div>
                 ))}
               </div>
             )}
             {finalizeErr && (
-              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-400">
+              <p className="mt-3 rounded-lg border border-[#FB7185]/30 bg-[#FB7185]/10 px-3 py-2 text-xs text-[#FB7185]">
                 生成失败：{finalizeErr}
               </p>
             )}
 
             {/* 底部：输入框 + 生成按钮 */}
-            <div className="mt-4 border-t border-slate-100 pt-4 dark:border-emerald-900/30">
+            <div className="mt-4 border-t border-[#1B3A2C] pt-4">
               <div className="flex items-center gap-2">
                 <input
                   className={inputCls}
@@ -558,7 +549,7 @@ ${h.negative}
                 <button
                   onClick={submit}
                   disabled={!input.trim() || polishing || (!pending && !!session)}
-                  className="shrink-0 cursor-pointer rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:shadow-none dark:border-emerald-900/60 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:disabled:border-slate-800 dark:disabled:text-slate-600"
+                  className="shrink-0 cursor-pointer rounded-xl border border-[#1B3A2C] bg-[#0C1713] px-4 py-2 text-[15px] font-medium text-[#8FA69C] shadow-sm transition hover:bg-[#0A1410] active:scale-95 disabled:cursor-not-allowed disabled:border-[#1B3A2C] disabled:bg-[#16281F] disabled:text-[#3F5A4F] disabled:shadow-none"
                 >
                   {session ? '发送' : '开始'}
                 </button>
@@ -566,17 +557,17 @@ ${h.negative}
                   onClick={generate}
                   disabled={!canGenerate || finalizing}
                   title={canGenerate ? '合成最终提示词' : '至少答完「画面主体」和「画面风格」后解锁'}
-                  className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-white transition active:scale-95 ${
+                  className={`shrink-0 rounded-xl px-4 py-2 text-[15px] font-semibold transition active:scale-95 ${
                     canGenerate
-                      ? 'cursor-pointer bg-gradient-to-r from-emerald-500 to-green-500 shadow-sm hover:opacity-90'
-                      : 'cursor-not-allowed bg-slate-300 dark:bg-slate-700'
+                      ? 'cursor-pointer bg-[#4ADE80] text-[#06100B] shadow-sm hover:opacity-90'
+                      : 'cursor-not-allowed bg-[#16281F] text-[#3F5A4F]'
                   }`}
                 >
                   {finalizing ? '生成中…' : '✨ 生成提示词'}
                 </button>
               </div>
               <div className="mt-2 flex items-center justify-between text-xs">
-                <p className="text-slate-400 dark:text-slate-500">
+                <p className="text-[#5E7A6C]">
                   {fullReady
                     ? complete
                       ? '已很完整，其余默认项会自动补齐'
@@ -586,7 +577,7 @@ ${h.negative}
                       : '答完「画面主体」和「画面风格」后即可生成'}
                 </p>
                 {session && !result && (
-                  <button onClick={generate} disabled={finalizing} className="cursor-pointer text-emerald-600 hover:underline dark:text-emerald-400">
+                  <button onClick={generate} disabled={finalizing} className="cursor-pointer text-[#4ADE80] hover:underline">
                     就这样，直接出 →
                   </button>
                 )}
@@ -595,35 +586,35 @@ ${h.negative}
           </section>
 
           {/* 右栏 · 提示词草稿 */}
-          <aside className="sticky top-6 w-full shrink-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:w-80 dark:border-emerald-900/40 dark:bg-slate-900/80">
+          <aside className="sticky top-6 w-full shrink-0 rounded-2xl border border-[#1B3A2C] bg-[#0C1713] p-6 shadow-sm lg:w-[360px]">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">提示词草稿</h2>
+              <h2 className="text-sm font-semibold text-[#EAF7F1]">提示词草稿</h2>
               {session && (
-                <button onClick={reset} className="cursor-pointer text-xs text-slate-400 transition hover:text-red-500 dark:hover:text-red-400">
+                <button onClick={reset} className="cursor-pointer text-xs text-[#5E7A6C] transition hover:text-[#FB7185]">
                   清空重来
                 </button>
               )}
             </div>
 
-            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">已完成 {answeredCount}/{ASK_ITEMS.length} 项</p>
-            <div className="mt-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800">
+            <p className="mt-2 text-xs text-[#8FA69C]">已完成 {answeredCount}/{ASK_ITEMS.length} 项</p>
+            <div className="mt-1 h-1.5 rounded-full bg-[#16281F]">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-300"
+                className="h-full rounded-full bg-[#4ADE80] transition-all duration-300"
                 style={{ width: `${(answeredCount / ASK_ITEMS.length) * 100}%` }}
               />
             </div>
             {fullReady && (
-              <p className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ 信息够了，可以出图了</p>
+              <p className="mt-2 text-xs font-medium text-[#4ADE80]">✓ 信息够了，可以出图了</p>
             )}
 
             <div className="mt-4 space-y-3">
               {session && (
                 <div>
-                  <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-[#8FA69C]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#4ADE80]" />
                     开场描述
                   </p>
-                  <p className="mt-0.5 text-sm leading-6 text-slate-700 dark:text-slate-200">{session.opening}</p>
+                  <p className="mt-0.5 text-[15px] leading-7 text-[#EAF7F1]">{session.opening}</p>
                 </div>
               )}
               {IMAGE_GUIDE.map((dim, i) => {
@@ -632,18 +623,18 @@ ${h.negative}
                 const autoText = dim.key === 'detail' ? '自动补全：细节丰富、高清' : dim.key === 'negative' ? '自动补全：默认负面词表' : ''
                 return (
                   <div key={dim.key}>
-                    <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
-                      <span className={`h-1.5 w-1.5 rounded-full ${ans ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-[#8FA69C]">
+                      <span className={`h-1.5 w-1.5 rounded-full ${ans ? 'bg-[#4ADE80]' : 'bg-[#1B3A2C]'}`} />
                       {i + 1}. {dim.title}
                       {dim.tier === 'required' ? (
-                        <span className="text-[10px] text-rose-400">必填</span>
+                        <span className="text-[10px] text-[#FB7185]">必填</span>
                       ) : dim.tier === 'recommended' ? (
-                        <span className="text-[10px] text-amber-500">推荐</span>
+                        <span className="text-[10px] text-[#EF9F27]">推荐</span>
                       ) : (
-                        <span className="text-[10px] text-slate-400 dark:text-slate-600">默认</span>
+                        <span className="text-[10px] text-[#5E7A6C]">默认</span>
                       )}
                     </p>
-                    <p className={`mt-0.5 text-sm leading-6 ${ans ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
+                    <p className={`mt-0.5 text-[15px] leading-7 ${ans ? 'text-[#EAF7F1]' : 'text-[#5E7A6C]'}`}>
                       {ans ?? (isAuto ? autoText : '— 待补充 —')}
                     </p>
                   </div>
@@ -652,16 +643,16 @@ ${h.negative}
             </div>
 
             {!session && (
-              <p className="mt-4 text-xs leading-5 text-slate-400 dark:text-slate-500">
+              <p className="mt-4 text-xs leading-5 text-[#5E7A6C]">
                 在左侧描述你想要的画面，这里会随你的回答逐段生长。
               </p>
             )}
 
             {/* 生成历史（折叠列表） */}
-            <div className="mt-5 border-t border-slate-100 pt-3 dark:border-emerald-900/30">
+            <div className="mt-5 border-t border-[#1B3A2C] pt-3">
               <button
                 onClick={() => setHistoryOpen(!historyOpen)}
-                className="flex w-full cursor-pointer items-center justify-between text-xs font-medium text-slate-500 transition hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                className="flex w-full cursor-pointer items-center justify-between text-xs font-medium text-[#8FA69C] transition hover:text-[#EAF7F1]"
               >
                 <span>📜 生成历史（{history.length}）</span>
                 <span className={`transition-transform ${historyOpen ? 'rotate-180' : ''}`}>▾</span>
@@ -669,48 +660,48 @@ ${h.negative}
               {historyOpen && (
                 <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
                   {history.length === 0 && (
-                    <p className="text-xs text-slate-400 dark:text-slate-600">还没有生成记录，合成一次后自动保存。</p>
+                    <p className="text-xs text-[#5E7A6C]">还没有生成记录，合成一次后自动保存。</p>
                   )}
                   {history.map((h) => (
                     <div
                       key={h.id}
-                      className="rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-emerald-900/40 dark:bg-slate-950/40"
+                      className="rounded-lg border border-[#1B3A2C] bg-[#0A1410] p-2"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <button
                           onClick={() => setExpandedId(expandedId === h.id ? null : h.id)}
                           className="min-w-0 flex-1 cursor-pointer text-left"
                         >
-                          <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">
+                          <p className="truncate text-xs font-medium text-[#EAF7F1]">
                             {h.opening || h.prompt_zh || h.prompt_en.slice(0, 30)}
                           </p>
-                          <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                          <p className="mt-0.5 text-[10px] text-[#5E7A6C]">
                             {h.style} · {h.ratio} · {h.created_at.slice(0, 16).replace('T', ' ')}
                           </p>
                         </button>
                         <button
                           onClick={() => api.deleteImageHistory(h.id).then(loadHistory).catch(() => {})}
                           title="删除这条记录"
-                          className="shrink-0 cursor-pointer text-xs text-slate-400 transition hover:text-red-500 dark:hover:text-red-400"
+                          className="shrink-0 cursor-pointer text-xs text-[#5E7A6C] transition hover:text-[#FB7185]"
                         >
                           ✕
                         </button>
                       </div>
                       {expandedId === h.id && (
-                        <div className="mt-2 border-t border-slate-200 pt-2 dark:border-emerald-900/30">
-                          <p className="whitespace-pre-wrap break-all text-[11px] leading-5 text-slate-600 dark:text-slate-300">
+                        <div className="mt-2 border-t border-[#1B3A2C] pt-2">
+                          <p className="whitespace-pre-wrap break-all text-[11px] leading-5 text-[#8FA69C]">
                             {h.prompt_en}
                           </p>
                           <div className="mt-2 flex gap-3">
                             <button
                               onClick={() => copy(`history-${h.id}`, h.prompt_en)}
-                              className="cursor-pointer text-[11px] text-emerald-600 hover:underline dark:text-emerald-400"
+                              className="cursor-pointer text-[11px] text-[#4ADE80] hover:underline"
                             >
                               {copied === `history-${h.id}` ? '已复制' : '复制提示词'}
                             </button>
                             <button
                               onClick={() => exportHistoryMd(h)}
-                              className="cursor-pointer text-[11px] text-emerald-600 hover:underline dark:text-emerald-400"
+                              className="cursor-pointer text-[11px] text-[#4ADE80] hover:underline"
                             >
                               导出 .md
                             </button>

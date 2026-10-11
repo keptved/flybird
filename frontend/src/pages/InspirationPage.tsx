@@ -5,7 +5,6 @@ import InspirationList from '../components/InspirationList'
 import Logo from '../components/Logo'
 import ModelSelect from '../components/ModelSelect'
 import ProjectSidebar from '../components/ProjectSidebar'
-import { useTheme } from '../hooks/useTheme'
 import type { ConsolidateResult, Inspiration, ModelInfo, Project } from '../types'
 
 function InspirationPage() {
@@ -22,8 +21,6 @@ function InspirationPage() {
   // 整合
   const [consolidating, setConsolidating] = useState(false)
   const [consolidated, setConsolidated] = useState<ConsolidateResult | null>(null)
-  // 主题：跨页面共享（localStorage 'flybird-theme'，默认暗色）
-  const { dark, toggle } = useTheme()
   const [exporting, setExporting] = useState(false)
 
   const currentProject = projects.find((p) => p.id === currentId) ?? null
@@ -170,48 +167,41 @@ function InspirationPage() {
   }
 
   return (
-    <div className="min-h-full bg-slate-50 transition-colors duration-300 dark:bg-[#0a0f0c]">
-      <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="min-h-full bg-[#06100B]">
+      <div className="mx-auto max-w-[1400px] px-6 py-8">
         {/* 顶栏 */}
-        <header className="flex items-center gap-3 border-b border-slate-200 pb-4 dark:border-emerald-900/40">
+        <header className="flex items-center gap-3 border-b border-[#1B3A2C] pb-4">
           <a
             href="#/"
             title="返回飞鸟主界面"
-            className="cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500 shadow-sm transition hover:bg-slate-50 dark:border-emerald-900/50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800"
+            className="cursor-pointer rounded-full border border-[#1B3A2C] bg-[#0C1713] px-3 py-1 text-xs font-medium text-[#8FA69C] shadow-sm transition hover:bg-[#0A1410]"
           >
             ← 返回
           </a>
           <Logo size={36} />
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <h1 className="bg-gradient-to-r from-emerald-600 to-green-500 bg-clip-text text-2xl font-bold text-transparent dark:from-emerald-400 dark:to-green-300">
+            <h1 className="text-2xl font-bold text-[#4ADE80]">
               飞鸟
             </h1>
-            <span className="text-xs font-medium tracking-wide text-slate-400 dark:text-slate-500">
+            <span className="text-xs font-medium tracking-wide text-[#5E7A6C]">
               你的灵感捕捉器
             </span>
           </div>
           <button
             onClick={handleToggleMode}
             title="点击切换清洗模式"
-            className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium shadow-sm transition ${
+            className={`ml-auto cursor-pointer rounded-full px-3 py-1 text-xs font-medium shadow-sm transition ${
               modelId === null
-                ? 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25'
-                : 'bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:hover:bg-blue-500/25'
+                ? 'bg-[#4ADE80]/15 text-[#4ADE80] hover:bg-[#4ADE80]/25'
+                : 'bg-[#EF9F27]/15 text-[#EF9F27] hover:bg-[#EF9F27]/25'
             }`}
           >
             {modelId === null ? 'mock 模式' : 'API 模式'} ⇄
           </button>
-          <button
-            onClick={toggle}
-            title={dark ? '切换到亮色模式' : '切换到暗色模式'}
-            className="ml-auto cursor-pointer rounded-full border border-slate-200 bg-white p-2 text-sm shadow-sm transition hover:scale-110 dark:border-emerald-900/50 dark:bg-slate-900"
-          >
-            {dark ? '☀️' : '🌙'}
-          </button>
         </header>
 
         {error && (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+          <p className="mt-4 rounded-lg border border-[#FB7185]/30 bg-[#FB7185]/10 p-3 text-sm text-[#FB7185]">
             {error}
           </p>
         )}
@@ -228,15 +218,15 @@ function InspirationPage() {
 
           {/* 右侧：输入 + 对比 + 整合 + 历史 */}
           <main className="min-w-0 flex-1">
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition dark:border-emerald-900/40 dark:bg-slate-900/80 dark:shadow-emerald-950/50 dark:shadow-lg">
+            <section className="rounded-2xl border border-[#1B3A2C] bg-[#0C1713] p-6 shadow-sm transition">
               <textarea
-                className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100 dark:border-emerald-900/50 dark:bg-slate-950/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20"
+                className="min-h-24 w-full resize-y rounded-xl border border-[#1B3A2C] bg-[#0A1410] p-3 text-[15px] leading-7 text-[#EAF7F1] outline-none transition placeholder-[#5E7A6C] focus:border-[#4ADE80] focus:ring-2 focus:ring-[#4ADE80]/20"
                 placeholder={`给「${currentProject?.name ?? '…'}」写一条灵感，大白话就行`}
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
               />
               <div className="mt-3 flex items-center justify-between">
-                <span className="text-xs text-slate-400 dark:text-slate-500">用大白话描述，不用管措辞</span>
+                <span className="text-xs text-[#5E7A6C]">用大白话描述，不用管措辞</span>
                 <div className="flex items-center gap-2">
                   <ModelSelect
                     models={models}
@@ -247,7 +237,7 @@ function InspirationPage() {
                   <button
                     onClick={handleClean}
                     disabled={loading || !rawText.trim() || !currentId}
-                    className="cursor-pointer rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-500/25 transition hover:from-emerald-400 hover:to-green-400 hover:shadow-lg hover:shadow-emerald-500/30 active:scale-95 disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none dark:disabled:from-slate-700 dark:disabled:to-slate-700"
+                    className="cursor-pointer rounded-xl bg-[#4ADE80] px-5 py-2 text-[15px] font-semibold text-[#06100B] shadow-sm transition hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:bg-[#16281F] disabled:text-[#3F5A4F] disabled:shadow-none"
                   >
                     {loading ? '清洗中…' : '✨ 清洗灵感'}
                   </button>
@@ -259,22 +249,22 @@ function InspirationPage() {
             {latest && latest.length > 0 && (
               <section className="mt-6">
                 <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-3">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-emerald-900/40 dark:bg-slate-900/80">
-                    <p className="mb-2 text-xs font-medium text-slate-400 dark:text-slate-500">清洗前（原文）</p>
-                    <p className="text-sm leading-6 text-slate-700 dark:text-slate-300">{latest[0].raw_text}</p>
+                  <div className="rounded-2xl border border-[#1B3A2C] bg-[#0C1713] p-6 shadow-sm">
+                    <p className="mb-2 text-xs font-medium text-[#5E7A6C]">清洗前（原文）</p>
+                    <p className="text-[15px] leading-7 text-[#8FA69C]">{latest[0].raw_text}</p>
                   </div>
-                  <div className="self-center text-xl text-slate-300 dark:text-emerald-600">→</div>
-                  <div className="rounded-2xl border-2 border-green-500 bg-white p-5 shadow-md shadow-green-500/10 dark:border-emerald-500 dark:bg-slate-900 dark:shadow-emerald-500/20">
-                    <p className="mb-2 text-xs font-medium text-green-700 dark:text-emerald-400">
+                  <div className="self-center text-xl text-[#4ADE80]">→</div>
+                  <div className="rounded-2xl border-2 border-[#4ADE80] bg-[#0C1713] p-6 shadow-md shadow-[#4ADE80]/10">
+                    <p className="mb-2 text-xs font-medium text-[#4ADE80]">
                       清洗后（精炼文本{latest.length > 1 ? ` · 拆出 ${latest.length} 条` : ''}）
                     </p>
                     {latest.length === 1 ? (
-                      <p className="text-sm leading-6 text-slate-800 dark:text-slate-100">{latest[0].cleaned_text}</p>
+                      <p className="text-[15px] leading-7 text-[#EAF7F1]">{latest[0].cleaned_text}</p>
                     ) : (
                       <ol className="space-y-2">
                         {latest.map((item, i) => (
-                          <li key={item.id} className="flex gap-2 text-sm leading-6 text-slate-800 dark:text-slate-100">
-                            <span className="shrink-0 font-semibold text-green-600 dark:text-emerald-400">{i + 1}.</span>
+                          <li key={item.id} className="flex gap-2 text-[15px] leading-7 text-[#EAF7F1]">
+                            <span className="shrink-0 font-semibold text-[#4ADE80]">{i + 1}.</span>
                             {item.cleaned_text}
                           </li>
                         ))}
@@ -282,7 +272,7 @@ function InspirationPage() {
                     )}
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+                <p className="mt-3 text-xs text-[#5E7A6C]">
                   ✓ 已自动保存到「{currentProject?.name}」
                 </p>
               </section>
@@ -291,14 +281,14 @@ function InspirationPage() {
             {/* 历史记录 */}
             <section className="mt-8">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <h2 className="text-sm font-semibold text-[#EAF7F1]">
                   灵感记录（{history.length} 条）
                 </h2>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleExport}
                     disabled={history.length === 0 || exporting}
-                    className="cursor-pointer rounded-xl border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:shadow-none dark:border-emerald-900/60 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:disabled:border-slate-800 dark:disabled:text-slate-600"
+                    className="cursor-pointer rounded-xl border border-[#1B3A2C] bg-[#0C1713] px-4 py-1.5 text-sm font-medium text-[#8FA69C] shadow-sm transition hover:bg-[#0A1410] active:scale-95 disabled:cursor-not-allowed disabled:bg-[#16281F] disabled:text-[#3F5A4F] disabled:shadow-none"
                     title={consolidated ? '导出整合后的结果' : '导出全部清洗后的灵感'}
                   >
                     {exporting ? '导出中…' : '⬇ 导出 MD'}
@@ -306,7 +296,7 @@ function InspirationPage() {
                   <button
                     onClick={handleConsolidate}
                     disabled={consolidating || history.length < 2}
-                    className="cursor-pointer rounded-xl border border-green-500 px-4 py-1.5 text-sm font-medium text-green-700 shadow-sm shadow-green-500/10 transition hover:bg-green-50 active:scale-95 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:shadow-none dark:border-emerald-500/60 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20 dark:disabled:border-slate-800 dark:disabled:bg-transparent dark:disabled:text-slate-600"
+                    className="cursor-pointer rounded-xl border border-[#4ADE80]/60 bg-[#4ADE80]/10 px-4 py-1.5 text-sm font-medium text-[#4ADE80] shadow-sm transition hover:bg-[#4ADE80]/20 active:scale-95 disabled:cursor-not-allowed disabled:border-[#1B3A2C] disabled:bg-transparent disabled:text-[#3F5A4F] disabled:shadow-none"
                     title={history.length < 2 ? '至少 2 条灵感才能整合' : '去重合并当前项目的所有灵感'}
                   >
                     {consolidating ? '整合中…' : '🧩 整合灵感'}
