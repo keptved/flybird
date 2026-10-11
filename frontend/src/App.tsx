@@ -93,6 +93,26 @@ function App() {
     }
   }
 
+  // 编辑灵感（清洗后文本）
+  const handleUpdateInspiration = async (id: number, cleanedText: string) => {
+    try {
+      const updated = await api.updateInspiration(id, cleanedText)
+      setHistory((prev) => prev.map((h) => (h.id === id ? updated : h)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '编辑失败')
+    }
+  }
+
+  // 删除灵感
+  const handleDeleteInspiration = async (id: number) => {
+    try {
+      await api.deleteInspiration(id)
+      setHistory((prev) => prev.filter((h) => h.id !== id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '删除失败')
+    }
+  }
+
   // 导出 MD：有整合结果导整合版，否则导全部清洗后灵感
   const handleExport = async () => {
     if (!currentId) return
@@ -214,7 +234,11 @@ function App() {
                 onClose={() => setConsolidated(null)}
               />
               <div className="mt-3">
-                <InspirationList items={history} />
+                <InspirationList
+                  items={history}
+                  onUpdate={handleUpdateInspiration}
+                  onDelete={handleDeleteInspiration}
+                />
               </div>
             </section>
           </main>

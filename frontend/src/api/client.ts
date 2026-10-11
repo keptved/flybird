@@ -31,6 +31,15 @@ export const api = {
   listInspirations: (projectId: number) =>
     request<Inspiration[]>(`/api/projects/${projectId}/inspirations`),
 
+  updateInspiration: (id: number, cleaned_text: string) =>
+    request<Inspiration>(`/api/inspirations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ cleaned_text }),
+    }),
+
+  deleteInspiration: (id: number) =>
+    request<{ ok: boolean }>(`/api/inspirations/${id}`, { method: 'DELETE' }),
+
   // 模型
   listModels: () => request<ModelInfo[]>('/api/models'),
 

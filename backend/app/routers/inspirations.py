@@ -75,3 +75,37 @@ def list_inspirations(project_id: int):
             .order_by(Inspiration.created_at.desc())
         )
         return session.exec(stmt).all()
+
+
+class InspirationUpdate(BaseModel):
+    """编辑灵感的请求体：只允许改清洗后文本"""
+    cleaned_text: str
+
+
+@router.patch("/inspirations/{inspiration_id}", response_model=InspirationOut)
+def update_inspiration(inspiration_id: int, payload: InspirationUpdate):
+    """编辑一条灵感的精炼文本"""
+    cleaned = payload.cleaned_text.strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="内容不能为空")
+    with Session(engine) as session:
+        record = session.get(Inspiration, inspiration_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="灵感不存在")
+        record.cleaned_text = cleaned
+        session.add(record)
+        session.commit()
+        session.refresh(record)
+        return record
+
+
+@router.delete("/inspirations/{inspiration_id}")
+def delete_inspiration(inspiration_id: int):
+    """删除一条灵感"""
+    with Session(engine) as session:
+        record = session.get(Inspiration, inspiration_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="灵感不存在")
+        session.delete(record)
+        session.commit()
+        return {"ok": True}
