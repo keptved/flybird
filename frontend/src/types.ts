@@ -33,3 +33,11 @@ export interface ConsolidateResult {
 export interface ImagePolishResult {
   polished: string
 }
+
+/** 图片创作助手 · 合成最终提示词响应 */
+export interface ImageFinalizeResult {
+  prompt_en: string
+  prompt_zh: string
+  negative: string
+  params: { style: string; ratio: string }
+}

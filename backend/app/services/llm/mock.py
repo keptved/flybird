@@ -95,59 +95,148 @@ class MockProvider:
 
         return result
 
-    # 图片创作助手 · 口语→书面小词表（mock polish 用）
-    # 只放多字安全词：单字替换会误伤（如 "美"→"美丽" 会把 "美女" 变成 "美丽女"）
-    POLISH_WORDS = {
-        "有点暗": "略显昏暗",
-        "有点亮": "略显明亮",
-        "有点": "略带",
-        "好看": "美观",
-        "漂亮": "美丽",
-        "帅气": "英俊",
-        "很大": "宏大",
-        "很小": "小巧",
-        "很多": "许多",
-        "暖和": "温暖",
-        "舒服": "舒适",
-        "安静": "宁静",
-        "穿着": "身着",
-        "戴着": "佩戴",
-        "拿着": "手持",
-        "在下雨": "落雨",
-        "下着雨": "落雨",
-    }
-
-    # 各维度常用画面描述前缀（避免复读 raw_text）
-    POLISH_TEMPLATES: dict[str, str] = {
-        "图片类型": "画面类型为{value}",
-        "画面主体": "画面主体为{value}",
-        "主体细节": "主体呈现{value}",
-        "场景背景": "场景设定为{value}",
-        "光线氛围": "光线与氛围表现为{value}",
-        "构图镜头": "构图与镜头角度为{value}",
-        "画质比例": "画面比例为{value}",
-    }
+    # 图片创作助手 · 补话词表（《引导规格》第四部分）：口语 → 专业
+    # 命中即用「补成」整段替换；多条命中按顺序叠加；都不命中则只清洗口水词
+    POLISH_RULES: list[tuple[str, str]] = [
+        ("一个美女", "年轻女性，正面半身，自然微笑，柔和自然光，浅景深"),
+        ("一个可爱的动物", "一只圆润的动物，暖色调，柔和光线，圆角造型"),
+        ("高级感", "低饱和色调，大留白，电影感打光，简洁构图"),
+        ("一张山水画", "中国传统水墨山水，宣纸质感，淡彩，大留白，远山层叠"),
+        ("有科技感", "3D渲染，冷蓝色调，几何结构，柔和光影，简约背景"),
+        ("人多热闹", "⚠️ 主体超过3个容易崩坏，建议拆分生成"),
+    ]
+    # 「有氛围/好看 → 反问」机制留到 S6 再做
 
     def polish_image(self, dimension: str, raw_text: str) -> str:
-        """规则版补话：去口水词 + 口语词换书面词 + 套维度模板，避免复读。"""
+        """规则版补话：命中替换表 → 用补成版本；否则清洗口水词后原样返回。"""
         text = raw_text.strip()
         if not text:
             return text
 
-        # 1. 去口水词（复用 clean 逻辑，但不去标点和重复字符）
+        # 命中替换表
+        for src, dst in self.POLISH_RULES:
+            if src in text:
+                return dst
+
+        # 未命中：去口水词 + 规整空白即可
         for filler in sorted(self.FILLERS, key=len, reverse=True):
             text = re.sub(filler, "", text)
-        text = re.sub(r"\s+", " ", text).strip()
+        text = re.sub(r"\s+", " ", text).strip().strip("，,。！？；;、 ")
+        return text or raw_text.strip()
 
-        # 2. 口语→书面替换
-        for collo, formal in sorted(self.POLISH_WORDS.items(), key=lambda kv: len(kv[0]), reverse=True):
-            text = text.replace(collo, formal)
+    # ---- 合成最终提示词（mock 规则版）----
 
-        # 3. 去首尾语气词/冗余符号
-        text = text.strip("，,。！？；;、 ")
-        if not text:
-            text = raw_text.strip()
+    # 与前端 imageGuide.ts enMap 保持一致的中→英映射
+    EN_MAP: dict[str, dict[str, str]] = {
+        "style": {
+            "写实摄影": "photographic, 50mm lens, shallow depth of field, natural light, film grain",
+            "扁平插画": "flat illustration, geometric shapes, bold outlines, subtle noise texture",
+            "手绘水彩": "watercolor, wet-on-wet, paper texture, negative space",
+            "3D 渲染": "3D render, C4D, octane render, clay material, soft lighting",
+            "国风水墨": "Chinese ink wash painting, rice paper texture, light color, large negative space",
+            "赛博朋克": "cyberpunk, neon lights, rainy night skyline, holographic projection",
+            "动漫/吉卜力": "anime style, Studio Ghibli, Hayao Miyazaki, warm tones",
+            "极简海报": "minimalist, large negative space, monochrome background, geometric elements",
+        },
+        "scene": {
+            "室内": "indoor scene",
+            "户外自然": "outdoor nature scene",
+            "城市街景": "city street scene",
+            "纯色/纯色渐变背景": "solid color gradient background",
+            "留白底": "minimalist empty background",
+        },
+        "light": {
+            "黄金时刻": "golden hour, warm sun light",
+            "蓝调时刻": "blue hour, twilight",
+            "正午硬光": "hard midday light",
+            "深夜霓虹": "neon lights at night",
+            "柔和晨光": "soft morning light",
+            "逆光剪影": "backlight, silhouette",
+            "侧光": "side lighting",
+            "顶光": "top lighting",
+            "轮廓光": "rim light",
+            "丁达尔光束": "Tyndall effect, volumetric light rays",
+            "电影感打光": "cinematic lighting",
+        },
+        "color": {
+            "暖色调": "warm color palette",
+            "冷色调": "cool color palette",
+            "低饱和莫兰迪": "desaturated Morandi color palette",
+            "高饱和撞色": "high saturation, contrasting colors",
+            "复古褪色": "vintage faded tones",
+            "黑白单色": "black and white, monochrome",
+            "高对比戏剧感": "high contrast, dramatic tone",
+        },
+        "composition": {
+            "特写": "close-up shot",
+            "近景": "medium close-up",
+            "中景": "medium shot",
+            "全景": "full shot",
+            "远景": "wide shot, long shot",
+            "平视": "eye-level angle",
+            "仰拍": "low angle shot",
+            "俯拍": "high angle shot",
+            "鸟瞰": "bird's-eye view",
+            "第一人称": "first-person view",
+            "三分法": "rule of thirds",
+            "中心构图": "centered composition",
+            "对称构图": "symmetrical composition",
+            "引导线": "leading lines",
+            "框架式": "framing composition",
+        },
+    }
 
-        # 4. 套模板（防止只是复读）
-        tpl = self.POLISH_TEMPLATES.get(dimension, "{value}")
-        return tpl.format(value=text)
+    DEFAULT_NEGATIVE = (
+        "text, watermark, signature, logo, extra fingers, extra limbs, "
+        "deformed hands, bad anatomy, blurry, lowres, jpeg artifacts"
+    )
+
+    def _to_en(self, key: str, zh: str) -> str:
+        """把中文答案映射成英文词；自由输入未命中词表时原样保留"""
+        if not zh:
+            return ""
+        m = self.EN_MAP.get(key, {})
+        # 先在词表里找「包含关系」命中（答案可能被润色过，不完全是选项原文）
+        for k, v in m.items():
+            if k in zh:
+                return v
+        return zh
+
+    def finalize_image(self, answers: dict, style: str, ratio: str) -> dict:
+        """规则版合成：enMap 中→英映射 + 逗号拼接 + 末尾补 high detail, 8k"""
+        subject_zh = (answers.get("subject") or "").strip()
+        style_en = self._to_en("style", style)
+        scene_en = self._to_en("scene", answers.get("scene") or "")
+        comp_en = self._to_en("composition", answers.get("composition") or "")
+        light_en = self._to_en("light", answers.get("light") or "")
+        color_en = self._to_en("color", answers.get("color") or "")
+
+        # 拼装顺序：subject, style, composition/view, light, color, detail, ratio
+        parts = [p for p in [
+            subject_zh,
+            style_en,
+            comp_en,
+            scene_en,
+            light_en,
+            color_en,
+            "high detail, 8k",
+            ratio,
+        ] if p]
+        prompt_en = ", ".join(parts)
+
+        prompt_zh = "，".join([p for p in [
+            subject_zh,
+            style and f"{style}风格",
+            answers.get("scene"),
+            answers.get("light"),
+            answers.get("color"),
+            answers.get("composition"),
+            "细节丰富、高清",
+            f"画幅 {ratio}",
+        ] if p]) + "。"
+
+        negative = answers.get("negative") or self.DEFAULT_NEGATIVE
+        if "默认" in negative:
+            negative = self.DEFAULT_NEGATIVE
+
+        return {"prompt_en": prompt_en, "prompt_zh": prompt_zh, "negative": negative}

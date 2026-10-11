@@ -31,3 +31,8 @@ class LLMProvider(Protocol):
         """图片创作助手·补话：把某一引导维度的大白话答案，
         润色成一句专业的画面描述（书面语、可直接进入绘画提示词）"""
         ...
+
+    def finalize_image(self, answers: dict, style: str, ratio: str) -> dict:
+        """图片创作助手·合成：把全部答案按公式拼成最终提示词。
+        返回 {"prompt_en": str, "prompt_zh": str, "negative": str}"""
+        ...

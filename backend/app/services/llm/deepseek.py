@@ -202,3 +202,54 @@ class OpenAICompatibleProvider:
             "原始描述：{raw_text}\n\n专业描述："
         ).format(dimension=dimension, raw_text=raw_text)
         return self._chat(prompt, max_tokens=256)
+
+    FINALIZE_PROMPT = (
+        "你是 AI 绘画提示词合成器。根据用户在各维度上的中文答案，合成最终提示词。\n"
+        "要求：\n"
+        "1）prompt_en：英文提示词，逗号分隔，60~120 词，不写成完整句子；\n"
+        "   严格按此顺序拼装：主体, 风格, 构图/视角, 光线, 色彩, 细节, 画幅比例；\n"
+        "   风格要展开为专业词组（例如「写实摄影」→ photographic, 50mm lens, "
+        "shallow depth of field, natural light, film grain）。\n"
+        "2）prompt_zh：中文对照，一句话说清画面。\n"
+        "3）negative：负面词，逗号分隔；未提供时用默认表：text, watermark, signature, "
+        "logo, extra fingers, extra limbs, deformed hands, bad anatomy, blurry, lowres, "
+        "jpeg artifacts。\n"
+        "只输出 JSON 对象：{\"prompt_en\": \"...\", \"prompt_zh\": \"...\", \"negative\": \"...\"}，"
+        "不要输出任何其他内容。\n\n"
+        "范例一：\n"
+        "答案：主体=一只橘猫在窗台晒太阳；风格=动漫/吉卜力；构图=特写、仰拍；"
+        "光线=逆光；色彩=暖色调；比例=1:1\n"
+        "输出：{\"prompt_en\": \"an orange tabby cat napping on a sunlit windowsill, "
+        "Studio Ghibli style illustration, close-up shot, low angle, backlit afternoon "
+        "sunlight, warm color palette, rich details, 1:1\", \"prompt_zh\": \"一只橘猫趴在洒满阳光的"
+        "窗台上打盹，吉卜力风格插画，采用特写与低角度视角，午后逆光透过毛发，整体暖色调，"
+        "细节丰富，方图。\", \"negative\": \"text, watermark, signature, logo, extra fingers, "
+        "extra limbs, deformed hands, bad anatomy, blurry, lowres, jpeg artifacts\"}\n\n"
+        "范例二：\n"
+        "答案：主体=一杯冰美式在木桌上；风格=写实摄影；构图=俯拍；光线=柔和晨光；"
+        "色彩=低饱和莫兰迪；比例=16:9\n"
+        "输出：{\"prompt_en\": \"a glass of iced americano on a wooden table, product "
+        "photography, shallow depth of field, 45-degree top-down shot, soft morning side "
+        "light, low saturation tones, clean background with no clutter, 16:9\", "
+        "\"prompt_zh\": \"一杯冰美式咖啡放在木桌上，产品摄影，浅景深，45 度俯拍，"
+        "柔和晨光从侧面打来，低饱和色调，背景干净无杂物，横图。\", \"negative\": "
+        "\"text, watermark, extra objects, blurry, deformed\"}\n\n"
+        "用户答案：\n{answers}\n\nJSON："
+    )
+
+    def finalize_image(self, answers: dict, style: str, ratio: str) -> dict:
+        """让模型按公式合成最终提示词；解析失败时抛错由路由层处理"""
+        joined = "\n".join(f"{k}={v}" for k, v in answers.items() if v)
+        content = self._chat(
+            self.FINALIZE_PROMPT.format(answers=joined, style=style, ratio=ratio),
+            max_tokens=1024,
+        )
+        try:
+            data = _parse_json_payload(content)
+            return {
+                "prompt_en": str(data.get("prompt_en") or "").strip(),
+                "prompt_zh": str(data.get("prompt_zh") or "").strip(),
+                "negative": str(data.get("negative") or "").strip(),
+            }
+        except (json.JSONDecodeError, TypeError, ValueError, AttributeError) as e:
+            raise RuntimeError(f"模型合成结果解析失败：{e}")

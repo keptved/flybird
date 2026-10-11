@@ -2,9 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import Logo from '../components/Logo'
 import ModelSelect from '../components/ModelSelect'
-import { IMAGE_GUIDE } from '../data/imageGuide'
+import {
+  COMPLETE_KEYS,
+  DEFAULT_NEGATIVE,
+  FULL_READY_KEYS,
+  IMAGE_GUIDE,
+  MIN_READY_KEYS,
+  USAGE_TO_RATIO,
+} from '../data/imageGuide'
 import { useTheme } from '../hooks/useTheme'
-import type { ModelInfo } from '../types'
+import type { ImageFinalizeResult, ModelInfo } from '../types'
 
 /** 聊天消息：AI 消息可带选项 chips */
 interface Msg {
@@ -19,73 +26,63 @@ interface Session {
   opening: string
   /** 各维度「润色后」的答案（用于草稿展示与合成） */
   answers: Record<string, string>
-  /** 各维度「用户原始输入」的答案（用于条件追问触发词匹配，防止润色后失配） */
+  /** 各维度「用户原始输入」 */
   raws: Record<string, string>
+  /** subject/style 是否已追问过 */
   followUpDone: Record<string, boolean>
   messages: Msg[]
 }
 
 /** 当前待回答的问题 */
 interface Pending {
-  dimId: string
+  dimKey: string
   title: string
   question: string
   options?: string[]
-  placeholder?: string
   isFollowUp: boolean
 }
 
-const STORAGE_KEY = 'flybird-image-session'
+const STORAGE_KEY = 'flybird-image-session-v2'
 
 const GREETING: Msg = {
   id: 0,
   role: 'ai',
-  text: '你好，我是图片创作向导。用一句大白话描述你想要的画面，我会按 7 个维度一项一项帮你问清楚——右侧的提示词草稿会跟着你的回答逐段生长。',
+  text: '你好，我是图片创作向导。用一句大白话描述你想要的画面，我会一项一项帮你问清楚——右侧的提示词草稿会跟着你的回答逐段生长。任何时候你都可以点「就这样，直接出」。',
 }
 
 function loadSession(): Session | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    const s = JSON.parse(raw) as Session
-    // 兼容 S1 旧会话：没有 raws 字段时用 answers 兜底
-    if (!s.raws) s.raws = { ...s.answers }
-    return s
+    return JSON.parse(raw) as Session
   } catch {
     return null
   }
 }
 
-/** 推导下一个该问的问题：找第一个未答维度；已答但触发条件追问且还没追问的，先追问 */
+/** 需要主动提问的维度（detail/negative 不主动问，用默认值） */
+const ASK_ITEMS = IMAGE_GUIDE.filter((d) => d.key !== 'detail' && d.key !== 'negative')
+
+/** 推导下一个该问的：找第一个未答的；subject/style 答过但未追问的，先追问 */
 function nextQuestion(s: Session): Pending | null {
-  for (const dim of IMAGE_GUIDE) {
-    if (!(dim.id in s.answers)) {
-      return {
-        dimId: dim.id,
-        title: dim.title,
-        question: dim.question,
-        options: dim.options,
-        placeholder: dim.placeholder,
-        isFollowUp: false,
-      }
+  for (const dim of ASK_ITEMS) {
+    if (!(dim.key in s.answers)) {
+      return { dimKey: dim.key, title: dim.title, question: dim.question, options: dim.options, isFollowUp: false }
     }
-    // 条件追问用原始输入匹配，避免润色后触发词被改写
-    const fu = dim.followUps?.find((f) => (s.raws[dim.id] ?? '').includes(f.trigger))
-    if (fu && !s.followUpDone[dim.id]) {
-      return {
-        dimId: dim.id,
-        title: dim.title,
-        question: fu.question,
-        options: fu.options,
-        placeholder: fu.placeholder,
-        isFollowUp: true,
-      }
+    if (dim.followup && !s.followUpDone[dim.key]) {
+      return { dimKey: dim.key, title: dim.title, question: dim.followup, options: [], isFollowUp: true }
     }
   }
   return null
 }
 
-/** 图片创作助手：多轮引导 → 边问边攒 → 一键合成（S1：静态框架 + 假会话） */
+/** 把 ratio 选项里的展示文案（如 "1:1 方图"）规整为 "1:1" */
+function normRatio(v: string): string {
+  const m = v.match(/\d+:\d+/)
+  return m ? m[0] : v
+}
+
+/** 图片创作助手：多轮引导 → 边问边攒 → 一键合成 */
 export default function ImagePage() {
   const { dark, toggle } = useTheme()
   const [models, setModels] = useState<ModelInfo[]>([])
@@ -93,12 +90,15 @@ export default function ImagePage() {
   const [session, setSession] = useState<Session | null>(loadSession)
   const [input, setInput] = useState('')
   const [polishing, setPolishing] = useState(false)
+  const [finalizing, setFinalizing] = useState(false)
+  const [result, setResult] = useState<ImageFinalizeResult | null>(null)
+  const [finalizeErr, setFinalizeErr] = useState('')
+  const [copied, setCopied] = useState('')
 
   useEffect(() => {
     api.listModels().then(setModels).catch(() => {})
   }, [])
 
-  // 会话持久化：刷新不丢
   useEffect(() => {
     if (session) localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
     else localStorage.removeItem(STORAGE_KEY)
@@ -106,11 +106,17 @@ export default function ImagePage() {
 
   const messages = session?.messages ?? [GREETING]
   const pending = useMemo(() => (session ? nextQuestion(session) : null), [session])
-  const answeredCount = session ? IMAGE_GUIDE.filter((d) => d.id in session.answers).length : 0
-  const finished = session !== null && pending === null
+  const answeredCount = session ? ASK_ITEMS.filter((d) => d.key in session.answers).length : 0
   const lastId = messages[messages.length - 1]?.id
 
-  // 起手：提交一句大白话，开始引导
+  // ---- 三档判定（纯前端）----
+  const answeredKeys = session ? Object.keys(session.answers) : []
+  const minReady = MIN_READY_KEYS.every((k) => answeredKeys.includes(k))
+  const fullReady = FULL_READY_KEYS.every((k) => answeredKeys.includes(k))
+  const complete = fullReady && COMPLETE_KEYS.every((k) => answeredKeys.includes(k))
+  const canGenerate = minReady // 最低可出即解锁
+
+  // 起手
   const start = () => {
     const text = input.trim()
     if (!text || session) return
@@ -119,71 +125,68 @@ export default function ImagePage() {
     s.messages.push({
       id: s.messages.length,
       role: 'ai',
-      text: '收到，这句话已经很有画面感了。我再按 7 个维度帮你补齐，一次只问一两个。',
+      text: '收到。我再按几个维度帮你补齐，一次只问一两个；不想答了就点底部「就这样，直接出」。',
     })
     const p = nextQuestion(s)
-    if (p) {
-      s.messages.push({
-        id: s.messages.length,
-        role: 'ai',
-        text: `第一问 · ${p.title}：${p.question}`,
-        options: p.options,
-      })
-    }
+    if (p) s.messages.push({ id: s.messages.length, role: 'ai', text: `第一问 · ${p.title}：${p.question}`, options: p.options })
     setSession({ ...s })
     setInput('')
   }
 
-  // 回答当前问题（chips 点选或自由输入都行）：先上屏，再调后端润色（"补话"）
+  // 回答当前问题
   const answer = async (raw: string) => {
     const text = raw.trim()
     if (!session || !pending || !text || polishing) return
     const dim = pending
 
-    // 追问答案与已有原文合并；润色始终针对合并后的原文，避免重复包装
     const raws = { ...session.raws }
-    raws[dim.dimId] =
-      dim.isFollowUp && raws[dim.dimId] ? `${raws[dim.dimId]}，${text}` : text
-    const followUpDone = dim.isFollowUp
-      ? { ...session.followUpDone, [dim.dimId]: true }
-      : session.followUpDone
+    raws[dim.dimKey] = dim.isFollowUp && raws[dim.dimKey] ? `${raws[dim.dimKey]}，${text}` : text
+    const followUpDone = dim.isFollowUp ? { ...session.followUpDone, [dim.dimKey]: true } : session.followUpDone
 
-    // 第一步：用户气泡先上屏，进入润色中状态
     const base: Session = { ...session, raws, followUpDone }
     base.messages = [...session.messages, { id: session.messages.length, role: 'user', text }]
     setSession({ ...base })
     setInput('')
     setPolishing(true)
 
-    // 第二步：调 /api/image/polish 润色；失败则记原文并在气泡里注明原因
+    // 润色
     let polished = ''
     let failReason = ''
     try {
-      const res = await api.polishImage(dim.title, raws[dim.dimId], modelId)
+      const res = await api.polishImage(dim.title, raws[dim.dimKey], modelId)
       polished = res.polished.trim()
     } catch (e) {
       failReason = e instanceof Error ? e.message : String(e)
     }
 
-    const answers = { ...base.answers, [dim.dimId]: polished || raws[dim.dimId] }
+    const answers = { ...base.answers, [dim.dimKey]: polished || raws[dim.dimKey] }
+
+    // 答用途后按比例联动自动带出 ratio
+    let ratioNote = ''
+    if (dim.dimKey === 'usage' && !dim.isFollowUp) {
+      const rec = USAGE_TO_RATIO[text]
+      if (rec) {
+        answers['ratio'] = rec
+        ratioNote = ` 已按用途推荐 ${rec} 比例。`
+      }
+    }
+
     const next: Session = { ...base, answers }
     next.messages = [...base.messages]
-    const noted = polished
-      ? `「${dim.title}」记为：${polished}`
-      : `「${dim.title}」先记下原文（润色失败：${failReason}）`
+    const noted = polished ? `「${dim.title}」记为：${polished}` : `「${dim.title}」先记下原文（润色失败：${failReason}）`
     const p = nextQuestion(next)
     if (p) {
       next.messages.push({
         id: next.messages.length,
         role: 'ai',
-        text: `${noted}。下一问 · ${p.title}：${p.question}`,
+        text: `${noted}${ratioNote} 下一问 · ${p.title}：${p.question}`,
         options: p.options,
       })
     } else {
       next.messages.push({
         id: next.messages.length,
         role: 'ai',
-        text: `${noted}。7 个维度全部补齐，右侧草稿已经长成，就等合成了。`,
+        text: `${noted}${ratioNote} 关键维度都补齐了，点底部「✨ 生成提示词」即可合成。`,
       })
     }
     setSession(next)
@@ -192,8 +195,71 @@ export default function ImagePage() {
 
   const submit = () => (session ? answer(input) : start())
 
+  // 生成提示词（未答项用默认值补齐，不留空）
+  const generate = async () => {
+    if (!session || !canGenerate || finalizing) return
+    setFinalizing(true)
+    setFinalizeErr('')
+    const answers: Record<string, string> = { ...session.answers }
+    for (const dim of IMAGE_GUIDE) {
+      if (!(dim.key in answers)) {
+        if (dim.key === 'negative') answers[dim.key] = DEFAULT_NEGATIVE.join(', ')
+        else if (dim.key === 'detail') answers[dim.key] = dim.defaultValue ?? '细节丰富、高清'
+        else if (dim.key === 'ratio') answers[dim.key] = answers['usage'] ? (USAGE_TO_RATIO[session.raws['usage'] ?? ''] ?? '1:1') : (dim.defaultValue ?? '1:1')
+        else answers[dim.key] = dim.defaultValue ?? ''
+      }
+    }
+    try {
+      const res = await api.finalizeImage({
+        answers,
+        style: answers['style'] ?? '',
+        ratio: normRatio(answers['ratio'] ?? '1:1'),
+        model_id: modelId,
+      })
+      setResult(res)
+    } catch (e) {
+      setFinalizeErr(e instanceof Error ? e.message : String(e))
+    }
+    setFinalizing(false)
+  }
+
+  const copy = async (label: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(label)
+      setTimeout(() => setCopied(''), 1500)
+    } catch { /* 忽略 */ }
+  }
+
+  const copyAll = () => {
+    if (!result) return
+    copy('全部', `英文提示词：\n${result.prompt_en}\n\n中文对照：\n${result.prompt_zh}\n\n负面词：\n${result.negative}\n\n参数：style=${result.params.style}, ratio=${result.params.ratio}`)
+  }
+
+  const exportMd = () => {
+    if (!result) return
+    const md = `# 图片提示词\n\n## 英文提示词\n\n${result.prompt_en}\n\n## 中文对照\n\n${result.prompt_zh}\n\n## 负面词\n\n${result.negative}\n\n## 参数\n\n- style: ${result.params.style}\n- ratio: ${result.params.ratio}\n`
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `图片提示词-${Date.now()}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const reset = () => {
+    setSession(null)
+    setResult(null)
+    setFinalizeErr('')
+    setInput('')
+  }
+
   const inputCls =
     'min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100 dark:border-emerald-900/50 dark:bg-slate-950/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20'
+
+  const chipCls =
+    'cursor-pointer rounded-full border border-emerald-300 px-3 py-1 text-xs text-emerald-700 transition hover:bg-emerald-50 active:scale-95 dark:border-emerald-700/60 dark:text-emerald-300 dark:hover:bg-emerald-500/10'
 
   return (
     <div className="min-h-full bg-slate-50 transition-colors duration-300 dark:bg-[#0a0f0c]">
@@ -242,15 +308,10 @@ export default function ImagePage() {
                     }
                   >
                     {m.text}
-                    {/* 选项 chips：只有当前待答问题（最后一条 AI 消息）可点 */}
-                    {m.role === 'ai' && m.id === lastId && pending && m.options && (
+                    {m.role === 'ai' && m.id === lastId && pending && m.options && m.options.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {m.options.map((op) => (
-                          <button
-                            key={op}
-                            onClick={() => answer(op)}
-                            className="cursor-pointer rounded-full border border-emerald-300 px-3 py-1 text-xs text-emerald-700 transition hover:bg-emerald-50 active:scale-95 dark:border-emerald-700/60 dark:text-emerald-300 dark:hover:bg-emerald-500/10"
-                          >
+                          <button key={op} onClick={() => answer(op)} className={chipCls}>
                             {op}
                           </button>
                         ))}
@@ -259,7 +320,6 @@ export default function ImagePage() {
                   </div>
                 </div>
               ))}
-              {/* 润色中提示 */}
               {polishing && (
                 <div className="flex justify-start">
                   <div className="rounded-2xl rounded-bl-sm border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-400 dark:border-emerald-900/40 dark:bg-slate-950/50 dark:text-slate-500">
@@ -268,6 +328,39 @@ export default function ImagePage() {
                 </div>
               )}
             </div>
+
+            {/* 结果卡 */}
+            {result && (
+              <div className="mt-4 space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">已生成 · 可投喂生图 AI</p>
+                  <div className="flex gap-2">
+                    <button onClick={copyAll} className={chipCls}>{copied === '全部' ? '已复制' : '复制全部'}</button>
+                    <button onClick={exportMd} className={chipCls}>导出 .md</button>
+                  </div>
+                </div>
+                {[
+                  { label: '英文提示词', text: result.prompt_en },
+                  { label: '中文对照', text: result.prompt_zh },
+                  { label: '负面词 + 参数', text: `${result.negative}\nstyle: ${result.params.style}   ratio: ${result.params.ratio}` },
+                ].map((c) => (
+                  <div key={c.label} className="rounded-lg border border-slate-200 bg-white p-3 dark:border-emerald-900/40 dark:bg-slate-900/60">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{c.label}</p>
+                      <button onClick={() => copy(c.label, c.text)} className="cursor-pointer text-xs text-emerald-600 hover:underline dark:text-emerald-400">
+                        {copied === c.label ? '已复制' : '复制'}
+                      </button>
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">{c.text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {finalizeErr && (
+              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-400">
+                生成失败：{finalizeErr}
+              </p>
+            )}
 
             {/* 底部：输入框 + 生成按钮 */}
             <div className="mt-4 border-t border-slate-100 pt-4 dark:border-emerald-900/30">
@@ -278,64 +371,77 @@ export default function ImagePage() {
                     !session
                       ? '例如：我想要一个深夜的书桌，台灯亮着，窗外在下雨，桌上有只猫'
                       : pending
-                        ? (pending.placeholder ?? '自由回答，或点上方选项')
-                        : '7 个维度已补齐'
+                        ? '自由回答，或点上方选项'
+                        : '维度已补齐'
                   }
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') submit()
                   }}
-                  disabled={finished || polishing}
+                  disabled={!pending && !!session}
                 />
                 <button
                   onClick={submit}
-                  disabled={!input.trim() || finished || polishing}
+                  disabled={!input.trim() || polishing || (!pending && !!session)}
                   className="shrink-0 cursor-pointer rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:shadow-none dark:border-emerald-900/60 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:disabled:border-slate-800 dark:disabled:text-slate-600"
                 >
                   {session ? '发送' : '开始'}
                 </button>
                 <button
-                  disabled
-                  title="答完必填项后解锁"
-                  className="shrink-0 cursor-not-allowed rounded-xl bg-gradient-to-r from-slate-300 to-slate-300 px-4 py-2 text-sm font-semibold text-white dark:from-slate-700 dark:to-slate-700"
+                  onClick={generate}
+                  disabled={!canGenerate || finalizing}
+                  title={canGenerate ? '合成最终提示词' : '至少答完「画面主体」和「画面风格」后解锁'}
+                  className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-white transition active:scale-95 ${
+                    canGenerate
+                      ? 'cursor-pointer bg-gradient-to-r from-emerald-500 to-green-500 shadow-sm hover:opacity-90'
+                      : 'cursor-not-allowed bg-slate-300 dark:bg-slate-700'
+                  }`}
                 >
-                  ✨ 生成提示词
+                  {finalizing ? '生成中…' : '✨ 生成提示词'}
                 </button>
               </div>
-              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-                一次只问 1~2 项；必填项答完后「生成提示词」解锁
-              </p>
+              <div className="mt-2 flex items-center justify-between text-xs">
+                <p className="text-slate-400 dark:text-slate-500">
+                  {fullReady
+                    ? complete
+                      ? '已很完整，其余默认项会自动补齐'
+                      : '信息够了，可以出图了'
+                    : minReady
+                      ? '可以出图了，但再答几项会更可控'
+                      : '答完「画面主体」和「画面风格」后即可生成'}
+                </p>
+                {session && !result && (
+                  <button onClick={generate} disabled={finalizing} className="cursor-pointer text-emerald-600 hover:underline dark:text-emerald-400">
+                    就这样，直接出 →
+                  </button>
+                )}
+              </div>
             </div>
           </section>
 
-          {/* 右栏 · 提示词草稿（实时生长） */}
+          {/* 右栏 · 提示词草稿 */}
           <aside className="sticky top-6 w-full shrink-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:w-80 dark:border-emerald-900/40 dark:bg-slate-900/80">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">提示词草稿</h2>
               {session && (
-                <button
-                  onClick={() => {
-                    setSession(null)
-                    setInput('')
-                  }}
-                  className="cursor-pointer text-xs text-slate-400 transition hover:text-red-500 dark:hover:text-red-400"
-                >
+                <button onClick={reset} className="cursor-pointer text-xs text-slate-400 transition hover:text-red-500 dark:hover:text-red-400">
                   清空重来
                 </button>
               )}
             </div>
 
-            {/* 进度条 */}
-            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">已完成 {answeredCount}/7 项</p>
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">已完成 {answeredCount}/{ASK_ITEMS.length} 项</p>
             <div className="mt-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-300"
-                style={{ width: `${(answeredCount / IMAGE_GUIDE.length) * 100}%` }}
+                style={{ width: `${(answeredCount / ASK_ITEMS.length) * 100}%` }}
               />
             </div>
+            {fullReady && (
+              <p className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ 信息够了，可以出图了</p>
+            )}
 
-            {/* 草稿段落：答一段亮一段 */}
             <div className="mt-4 space-y-3">
               {session && (
                 <div>
@@ -347,26 +453,24 @@ export default function ImagePage() {
                 </div>
               )}
               {IMAGE_GUIDE.map((dim, i) => {
-                const ans = session?.answers[dim.id]
+                const ans = session?.answers[dim.key]
+                const isAuto = dim.key === 'detail' || dim.key === 'negative'
+                const autoText = dim.key === 'detail' ? '自动补全：细节丰富、高清' : dim.key === 'negative' ? '自动补全：默认负面词表' : ''
                 return (
-                  <div key={dim.id}>
+                  <div key={dim.key}>
                     <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${ans ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-slate-700'}`}
-                      />
+                      <span className={`h-1.5 w-1.5 rounded-full ${ans ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-slate-700'}`} />
                       {i + 1}. {dim.title}
-                      {dim.required ? (
+                      {dim.tier === 'required' ? (
                         <span className="text-[10px] text-rose-400">必填</span>
+                      ) : dim.tier === 'recommended' ? (
+                        <span className="text-[10px] text-amber-500">推荐</span>
                       ) : (
-                        <span className="text-[10px] text-slate-400 dark:text-slate-600">选填</span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-600">默认</span>
                       )}
                     </p>
-                    <p
-                      className={`mt-0.5 text-sm leading-6 ${
-                        ans ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'
-                      }`}
-                    >
-                      {ans ?? '— 待补充 —'}
+                    <p className={`mt-0.5 text-sm leading-6 ${ans ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}>
+                      {ans ?? (isAuto ? autoText : '— 待补充 —')}
                     </p>
                   </div>
                 )

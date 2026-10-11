@@ -1,4 +1,4 @@
-import type { ConsolidateResult, ImagePolishResult, Inspiration, ModelInfo, Project } from '../types'
+import type { ConsolidateResult, ImageFinalizeResult, ImagePolishResult, Inspiration, ModelInfo, Project } from '../types'
 
 const BASE_URL = 'http://localhost:8000'
 
@@ -64,6 +64,13 @@ export const api = {
     request<ImagePolishResult>('/api/image/polish', {
       method: 'POST',
       body: JSON.stringify({ dimension, raw_text: rawText, model_id: modelId }),
+    }),
+
+  // 图片创作助手 · 合成最终提示词
+  finalizeImage: (payload: { answers: Record<string, string>; style: string; ratio: string; model_id: number | null }) =>
+    request<ImageFinalizeResult>('/api/image/finalize', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 
   // 导出 MD（返回文件流，前端触发下载；背景/目标/约束由后端 AI 自动分析生成）
