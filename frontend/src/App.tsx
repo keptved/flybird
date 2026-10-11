@@ -22,6 +22,12 @@ function App() {
   const [consolidated, setConsolidated] = useState<ConsolidateResult | null>(null)
   // 主题：默认暗色（黑绿基调）
   const [dark, setDark] = useState(true)
+  // 导出弹窗：可选的提示词上下文（记住本次填写，方便二次导出微调）
+  const [showExport, setShowExport] = useState(false)
+  const [expBackground, setExpBackground] = useState('')
+  const [expGoal, setExpGoal] = useState('')
+  const [expConstraints, setExpConstraints] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -135,16 +141,18 @@ function App() {
 
   // 导出 MD：有整合结果导整合版，否则导全部清洗后灵感
   const handleExport = async () => {
-    if (!currentId) return
+    if (!currentId || exporting) return
+    setExporting(true)
     setError('')
     try {
-      if (consolidated) {
-        await api.exportMd(currentId, consolidated.results, '（整合版）')
-      } else {
-        await api.exportMd(currentId, history.map((h) => h.cleaned_text), '')
-      }
+      const items = consolidated ? consolidated.results : history.map((h) => h.cleaned_text)
+      const suffix = consolidated ? '（整合版）' : ''
+      await api.exportMd(currentId, items, suffix, expBackground, expGoal, expConstraints)
+      setShowExport(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : '导出失败')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -248,7 +256,7 @@ function App() {
                 </h2>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleExport}
+                    onClick={() => setShowExport(true)}
                     disabled={history.length === 0}
                     className="cursor-pointer rounded-xl border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:shadow-none dark:border-emerald-900/60 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:disabled:border-slate-800 dark:disabled:text-slate-600"
                     title={consolidated ? '导出整合后的结果' : '导出全部清洗后的灵感'}
@@ -281,6 +289,65 @@ function App() {
           </main>
         </div>
       </div>
+
+      {/* 导出弹窗：填写可选的提示词上下文，居中显示 */}
+      {showExport && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm dark:bg-black/60"
+          onClick={() => setShowExport(false)}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:border dark:border-emerald-900/50 dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-1 text-base font-semibold text-slate-800 dark:text-slate-100">
+              导出提示词文件
+            </h3>
+            <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
+              导出的 MD 自带六段提示词结构，可直接投喂给大模型
+            </p>
+
+            <div className="space-y-3">
+              {([
+                ['项目背景', expBackground, setExpBackground, '例如：这是一个面向学生的校园工具，预算为零…'],
+                ['核心目标', expGoal, setExpGoal, '例如：做出一个能跑的 MVP，两周内上线试用…'],
+                ['约束条件', expConstraints, setExpConstraints, '例如：优先免费方案；交互零学习成本（一行一条）…'],
+              ] as const).map(([label, val, setVal, ph]) => (
+                <div key={label}>
+                  <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {label}
+                    <span className="ml-2 font-normal text-slate-400 dark:text-slate-500">
+                      不填则使用默认文案
+                    </span>
+                  </label>
+                  <textarea
+                    className="min-h-16 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100 dark:border-emerald-900/50 dark:bg-slate-950/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20"
+                    placeholder={ph}
+                    value={val}
+                    onChange={(e) => setVal(e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setShowExport(false)}
+                className="flex-1 cursor-pointer rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex-1 cursor-pointer rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 px-3 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-500/25 transition hover:from-emerald-400 hover:to-green-400 active:scale-95 disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none"
+              >
+                {exporting ? '导出中…' : '⬇ 导出 MD'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

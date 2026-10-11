@@ -56,12 +56,19 @@ export const api = {
       body: JSON.stringify({ model_id }),
     }),
 
-  // 导出 MD（返回文件流，前端触发下载）
-  exportMd: async (projectId: number, items: string[], titleSuffix: string) => {
+  // 导出 MD（返回文件流，前端触发下载；支持可选的提示词上下文字段）
+  exportMd: async (
+    projectId: number,
+    items: string[],
+    titleSuffix: string,
+    background = '',
+    goal = '',
+    constraints = '',
+  ) => {
     const resp = await fetch(`${BASE_URL}/api/projects/${projectId}/export.md`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items, title_suffix: titleSuffix }),
+      body: JSON.stringify({ items, title_suffix: titleSuffix, background, goal, constraints }),
     })
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ detail: resp.statusText }))

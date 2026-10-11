@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>飞鸟 · 折纸鸟</title>
+  <rect width="512" height="512" rx="112" fill="#0B1512"/>
+  <g transform="scale(5.3333) translate(-504,-66)">
+    <path d="M566 106 L530 124 L558 130 Z" fill="#1D9E75"/>
+    <path d="M548 146 L566 90 L580 142 Z" fill="#5DCAA5"/>
+    <path d="M548 146 L540 152" stroke="#1D9E75" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="590" cy="98" r="5" fill="#EF9F27"/>
+  </g>
+</svg>
