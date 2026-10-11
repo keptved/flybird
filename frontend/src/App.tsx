@@ -20,6 +20,12 @@ function App() {
   // 整合
   const [consolidating, setConsolidating] = useState(false)
   const [consolidated, setConsolidated] = useState<ConsolidateResult | null>(null)
+  // 主题：默认暗色（黑绿基调）
+  const [dark, setDark] = useState(true)
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+  }, [dark])
 
   const currentProject = projects.find((p) => p.id === currentId) ?? null
 
@@ -143,26 +149,35 @@ function App() {
   }
 
   return (
-    <div className="min-h-full bg-slate-50">
+    <div className="min-h-full bg-slate-50 transition-colors duration-300 dark:bg-[#0a0f0c]">
       <div className="mx-auto max-w-5xl px-6 py-8">
         {/* 顶栏 */}
-        <header className="flex items-center gap-3 border-b border-slate-200 pb-4">
-          <h1 className="text-xl font-semibold text-slate-800">飞鸟</h1>
+        <header className="flex items-center gap-3 border-b border-slate-200 pb-4 dark:border-emerald-900/40">
+          <h1 className="bg-gradient-to-r from-emerald-600 to-green-500 bg-clip-text text-2xl font-bold text-transparent dark:from-emerald-400 dark:to-green-300">
+            飞鸟
+          </h1>
           <button
             onClick={handleToggleMode}
             title="点击切换清洗模式"
-            className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition ${
+            className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium shadow-sm transition ${
               modelId === null
-                ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                ? 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25'
+                : 'bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:hover:bg-blue-500/25'
             }`}
           >
             {modelId === null ? 'mock 模式' : 'API 模式'} ⇄
           </button>
+          <button
+            onClick={() => setDark(!dark)}
+            title={dark ? '切换到亮色模式' : '切换到暗色模式'}
+            className="ml-auto cursor-pointer rounded-full border border-slate-200 bg-white p-2 text-sm shadow-sm transition hover:scale-110 dark:border-emerald-900/50 dark:bg-slate-900"
+          >
+            {dark ? '☀️' : '🌙'}
+          </button>
         </header>
 
         {error && (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
             {error}
           </p>
         )}
@@ -178,15 +193,15 @@ function App() {
 
           {/* 右侧：输入 + 对比 + 整合 + 历史 */}
           <main className="min-w-0 flex-1">
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition dark:border-emerald-900/40 dark:bg-slate-900/80 dark:shadow-emerald-950/50 dark:shadow-lg">
               <textarea
-                className="min-h-24 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 outline-none focus:border-green-400"
+                className="min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100 dark:border-emerald-900/50 dark:bg-slate-950/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-emerald-500 dark:focus:ring-emerald-500/20"
                 placeholder={`给「${currentProject?.name ?? '…'}」写一条灵感，大白话就行`}
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
               />
               <div className="mt-3 flex items-center justify-between">
-                <span className="text-xs text-slate-400">用大白话描述，不用管措辞</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500">用大白话描述，不用管措辞</span>
                 <div className="flex items-center gap-2">
                   <ModelSelect
                     models={models}
@@ -197,7 +212,7 @@ function App() {
                   <button
                     onClick={handleClean}
                     disabled={loading || !rawText.trim() || !currentId}
-                    className="rounded-lg bg-green-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="cursor-pointer rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-500/25 transition hover:from-emerald-400 hover:to-green-400 hover:shadow-lg hover:shadow-emerald-500/30 active:scale-95 disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none dark:disabled:from-slate-700 dark:disabled:to-slate-700"
                   >
                     {loading ? '清洗中…' : '✨ 清洗灵感'}
                   </button>
@@ -209,17 +224,17 @@ function App() {
             {latest && (
               <section className="mt-6">
                 <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-3">
-                  <div className="rounded-xl border border-slate-200 bg-white p-5">
-                    <p className="mb-2 text-xs font-medium text-slate-400">清洗前（原文）</p>
-                    <p className="text-sm leading-6 text-slate-700">{latest.raw_text}</p>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-emerald-900/40 dark:bg-slate-900/80">
+                    <p className="mb-2 text-xs font-medium text-slate-400 dark:text-slate-500">清洗前（原文）</p>
+                    <p className="text-sm leading-6 text-slate-700 dark:text-slate-300">{latest.raw_text}</p>
                   </div>
-                  <div className="self-center text-xl text-slate-300">→</div>
-                  <div className="rounded-xl border-2 border-green-500 bg-white p-5">
-                    <p className="mb-2 text-xs font-medium text-green-700">清洗后（精炼文本）</p>
-                    <p className="text-sm leading-6 text-slate-800">{latest.cleaned_text}</p>
+                  <div className="self-center text-xl text-slate-300 dark:text-emerald-600">→</div>
+                  <div className="rounded-2xl border-2 border-green-500 bg-white p-5 shadow-md shadow-green-500/10 dark:border-emerald-500 dark:bg-slate-900 dark:shadow-emerald-500/20">
+                    <p className="mb-2 text-xs font-medium text-green-700 dark:text-emerald-400">清洗后（精炼文本）</p>
+                    <p className="text-sm leading-6 text-slate-800 dark:text-slate-100">{latest.cleaned_text}</p>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-slate-400">
+                <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
                   ✓ 已自动保存到「{currentProject?.name}」
                 </p>
               </section>
@@ -228,14 +243,14 @@ function App() {
             {/* 历史记录 */}
             <section className="mt-8">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-700">
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                   灵感记录（{history.length} 条）
                 </h2>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleExport}
                     disabled={history.length === 0}
-                    className="rounded-lg border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                    className="cursor-pointer rounded-xl border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:shadow-none dark:border-emerald-900/60 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:disabled:border-slate-800 dark:disabled:text-slate-600"
                     title={consolidated ? '导出整合后的结果' : '导出全部清洗后的灵感'}
                   >
                     ⬇ 导出 MD
@@ -243,7 +258,7 @@ function App() {
                   <button
                     onClick={handleConsolidate}
                     disabled={consolidating || history.length < 2}
-                    className="rounded-lg border border-green-500 px-4 py-1.5 text-sm font-medium text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                    className="cursor-pointer rounded-xl border border-green-500 px-4 py-1.5 text-sm font-medium text-green-700 shadow-sm shadow-green-500/10 transition hover:bg-green-50 active:scale-95 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:shadow-none dark:border-emerald-500/60 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20 dark:disabled:border-slate-800 dark:disabled:bg-transparent dark:disabled:text-slate-600"
                     title={history.length < 2 ? '至少 2 条灵感才能整合' : '去重合并当前项目的所有灵感'}
                   >
                     {consolidating ? '整合中…' : '🧩 整合灵感'}
