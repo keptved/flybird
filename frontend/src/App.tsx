@@ -62,6 +62,20 @@ function App() {
     }
   }
 
+  // 一键切换 Mock / API 模式：切到 API 时用第一个已配置的非内置模型
+  const handleToggleMode = () => {
+    if (modelId === null) {
+      const apiModel = models.find((m) => !m.is_builtin && m.has_key)
+      if (apiModel) {
+        setModelId(apiModel.id)
+      } else {
+        setError('还没有配置带 API Key 的模型，请先在「模型」下拉里添加')
+      }
+    } else {
+      setModelId(null)
+    }
+  }
+
   // 清洗灵感
   const handleClean = async () => {
     if (!currentId || !rawText.trim() || loading) return
@@ -133,10 +147,18 @@ function App() {
       <div className="mx-auto max-w-5xl px-6 py-8">
         {/* 顶栏 */}
         <header className="flex items-center gap-3 border-b border-slate-200 pb-4">
-          <h1 className="text-xl font-semibold text-slate-800">灵感助手</h1>
-          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
-            mock 模式
-          </span>
+          <h1 className="text-xl font-semibold text-slate-800">飞鸟</h1>
+          <button
+            onClick={handleToggleMode}
+            title="点击切换清洗模式"
+            className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition ${
+              modelId === null
+                ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+            }`}
+          >
+            {modelId === null ? 'mock 模式' : 'API 模式'} ⇄
+          </button>
         </header>
 
         {error && (
