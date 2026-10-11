@@ -1,5 +1,4 @@
 """Mock 清洗器：规则兜底，不依赖 API key"""
-import difflib
 import re
 
 
@@ -67,13 +66,20 @@ class MockProvider:
             "constraints": "优先简单可落地的方案，避免过度设计\n面向普通用户，交互要零学习成本\n优先使用成熟、免费的技术方案",
         }
 
+    @staticmethod
+    def _bigrams(s: str) -> set[str]:
+        """连续两字组集合：对中文的相似度判断比整句 SequenceMatcher 更敏感"""
+        s = re.sub(r"\s+", "", s)
+        return {s[i:i + 2] for i in range(len(s) - 1)} if len(s) >= 2 else ({s} if s else set())
+
     def consolidate(self, texts: list[str]) -> list[str]:
-        """去重合并：用 difflib 相似度 > 0.7 的条目合并，保留更长/更完整的表述"""
+        """去重合并：按字面重合度（bigram 覆盖率 ≥ 0.3）聚合，代表句并入其余条目的差异片段"""
         if not texts:
             return []
 
         # 先清洗每条文本
         cleaned = [self.clean(t) for t in texts]
+        grams = [self._bigrams(t) for t in cleaned]
         result: list[str] = []
         used = set()
 
@@ -84,14 +90,17 @@ class MockProvider:
             for j in range(i + 1, len(cleaned)):
                 if j in used:
                     continue
-                ratio = difflib.SequenceMatcher(None, t, cleaned[j]).ratio()
-                if ratio > 0.7:
+                a, b = grams[i], grams[j]
+                overlap = len(a & b) / min(len(a), len(b)) if a and b else 0
+                if overlap >= 0.3:
                     group.append(cleaned[j])
                     used.add(j)
             used.add(i)
-            # 保留字数最多的那条作为合并代表
+            # 代表句 = 最长那条；其余条目的差异内容并进去，看起来是真的「整合」而非「挑选」
             best = max(group, key=len)
-            result.append(best)
+            extras = [x.strip("，。；、 ") for x in group if x is not best]
+            extras = [x for x in extras if x and x not in best]
+            result.append(best + ("；" + "；".join(extras) if extras else ""))
 
         return result
 
