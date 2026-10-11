@@ -11,7 +11,7 @@ import {
   USAGE_TO_RATIO,
 } from '../data/imageGuide'
 import { useTheme } from '../hooks/useTheme'
-import type { ImageFinalizeResult, ModelInfo } from '../types'
+import type { ImageFinalizeResult, ImageHistoryItem, ModelInfo } from '../types'
 
 /** 聊天消息：AI 消息可带选项 chips */
 interface Msg {
@@ -94,10 +94,18 @@ export default function ImagePage() {
   const [result, setResult] = useState<ImageFinalizeResult | null>(null)
   const [finalizeErr, setFinalizeErr] = useState('')
   const [copied, setCopied] = useState('')
+  const [history, setHistory] = useState<ImageHistoryItem[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
 
   useEffect(() => {
     api.listModels().then(setModels).catch(() => {})
+    loadHistory()
   }, [])
+
+  const loadHistory = () => {
+    api.listImageHistory().then((r) => setHistory(r.items)).catch(() => {})
+  }
 
   useEffect(() => {
     if (session) localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
@@ -267,9 +275,11 @@ export default function ImagePage() {
         answers,
         style: answers['style'] ?? '',
         ratio: normRatio(answers['ratio'] ?? '1:1'),
+        opening: session.opening,
         model_id: modelId,
       })
       setResult(res)
+      loadHistory() // 后端已自动落库，刷新历史列表
     } catch (e) {
       setFinalizeErr(e instanceof Error ? e.message : String(e))
     }
@@ -363,6 +373,60 @@ ${dimRows}
     setResult(null)
     setFinalizeErr('')
     setInput('')
+  }
+
+  // 历史记录导出：结构与当前会话导出一致，但数据来自历史条目
+  const exportHistoryMd = (h: ImageHistoryItem) => {
+    const md = `# 🎨 AI 绘画提示词
+
+> 由 **飞鸟 · 图片创作助手** 生成 · ${h.created_at.slice(0, 16).replace('T', ' ')}
+> 适用工具：Midjourney / Stable Diffusion / 即梦 / DALL·E / 通义万相 等主流生图 AI
+
+---
+
+## 起手句
+
+${h.opening || '—'}
+
+## 一、英文提示词（复制这段去投喂）
+
+\`\`\`text
+${h.prompt_en}
+\`\`\`
+
+## 二、中文对照
+
+${h.prompt_zh}
+
+## 三、负面提示词（Negative Prompt）
+
+\`\`\`text
+${h.negative}
+\`\`\`
+
+## 四、画面参数
+
+| 参数 | 值 | 说明 |
+|---|---|---|
+| 画面风格 | ${h.style} | 决定整体调性 |
+| 画幅比例 | ${h.ratio} | Midjourney 对应 \`--ar ${h.ratio}\` |
+
+## 五、微调建议
+
+- **每次只改一个变量**：不满意时先换风格词，再调光线，不要全改
+- 画面崩坏（多手指/变形）→ 检查负面词是否生效
+- 主体超过 3 个容易崩 → 建议拆分生成后自行拼图
+
+---
+*飞鸟助手平台 · 图片创作助手*
+`
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `图片提示词-${h.created_at.slice(0, 10).replaceAll('-', '')}-${h.id}.md`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const inputCls =
@@ -592,6 +656,72 @@ ${dimRows}
                 在左侧描述你想要的画面，这里会随你的回答逐段生长。
               </p>
             )}
+
+            {/* 生成历史（折叠列表） */}
+            <div className="mt-5 border-t border-slate-100 pt-3 dark:border-emerald-900/30">
+              <button
+                onClick={() => setHistoryOpen(!historyOpen)}
+                className="flex w-full cursor-pointer items-center justify-between text-xs font-medium text-slate-500 transition hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+              >
+                <span>📜 生成历史（{history.length}）</span>
+                <span className={`transition-transform ${historyOpen ? 'rotate-180' : ''}`}>▾</span>
+              </button>
+              {historyOpen && (
+                <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+                  {history.length === 0 && (
+                    <p className="text-xs text-slate-400 dark:text-slate-600">还没有生成记录，合成一次后自动保存。</p>
+                  )}
+                  {history.map((h) => (
+                    <div
+                      key={h.id}
+                      className="rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-emerald-900/40 dark:bg-slate-950/40"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => setExpandedId(expandedId === h.id ? null : h.id)}
+                          className="min-w-0 flex-1 cursor-pointer text-left"
+                        >
+                          <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">
+                            {h.opening || h.prompt_zh || h.prompt_en.slice(0, 30)}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                            {h.style} · {h.ratio} · {h.created_at.slice(0, 16).replace('T', ' ')}
+                          </p>
+                        </button>
+                        <button
+                          onClick={() => api.deleteImageHistory(h.id).then(loadHistory).catch(() => {})}
+                          title="删除这条记录"
+                          className="shrink-0 cursor-pointer text-xs text-slate-400 transition hover:text-red-500 dark:hover:text-red-400"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      {expandedId === h.id && (
+                        <div className="mt-2 border-t border-slate-200 pt-2 dark:border-emerald-900/30">
+                          <p className="whitespace-pre-wrap break-all text-[11px] leading-5 text-slate-600 dark:text-slate-300">
+                            {h.prompt_en}
+                          </p>
+                          <div className="mt-2 flex gap-3">
+                            <button
+                              onClick={() => copy(`history-${h.id}`, h.prompt_en)}
+                              className="cursor-pointer text-[11px] text-emerald-600 hover:underline dark:text-emerald-400"
+                            >
+                              {copied === `history-${h.id}` ? '已复制' : '复制提示词'}
+                            </button>
+                            <button
+                              onClick={() => exportHistoryMd(h)}
+                              className="cursor-pointer text-[11px] text-emerald-600 hover:underline dark:text-emerald-400"
+                            >
+                              导出 .md
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </aside>
         </div>
       </div>

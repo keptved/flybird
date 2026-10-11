@@ -36,3 +36,16 @@ class ModelConfig(SQLModel, table=True):
     model: str = ""                    # 如 deepseek-chat
     is_builtin: bool = False           # 内置项（mock）不可删除
     created_at: datetime = Field(default_factory=utc_now)
+
+
+class ImageHistory(SQLModel, table=True):
+    """图片创作助手 · 生成历史：每次成功合成最终提示词时自动保存一条"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    opening: str = ""                  # 起手句（大白话原文）
+    answers_json: str = ""             # 各维度答案，JSON 字符串
+    prompt_en: str = ""                # 英文提示词
+    prompt_zh: str = ""                # 中文对照
+    negative: str = ""                 # 负面词
+    style: str = ""                    # 画面风格
+    ratio: str = ""                    # 画幅比例
+    created_at: datetime = Field(default_factory=utc_now)

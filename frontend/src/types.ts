@@ -46,3 +46,15 @@ export interface ImageFinalizeResult {
 export interface ImageExtractResult {
   fields: Record<string, string>
 }
+
+/** 图片创作助手 · 生成历史条目 */
+export interface ImageHistoryItem {
+  id: number
+  opening: string
+  prompt_en: string
+  prompt_zh: string
+  negative: string
+  style: string
+  ratio: string
+  created_at: string
+}

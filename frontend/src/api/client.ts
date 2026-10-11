@@ -1,4 +1,4 @@
-import type { ConsolidateResult, ImageExtractResult, ImageFinalizeResult, ImagePolishResult, Inspiration, ModelInfo, Project } from '../types'
+import type { ConsolidateResult, ImageExtractResult, ImageFinalizeResult, ImageHistoryItem, ImagePolishResult, Inspiration, ModelInfo, Project } from '../types'
 
 const BASE_URL = 'http://localhost:8000'
 
@@ -67,7 +67,7 @@ export const api = {
     }),
 
   // 图片创作助手 · 合成最终提示词
-  finalizeImage: (payload: { answers: Record<string, string>; style: string; ratio: string; model_id: number | null }) =>
+  finalizeImage: (payload: { answers: Record<string, string>; style: string; ratio: string; opening: string; model_id: number | null }) =>
     request<ImageFinalizeResult>('/api/image/finalize', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -79,6 +79,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ text, model_id: modelId }),
     }),
+
+  // 图片创作助手 · 生成历史
+  listImageHistory: () => request<{ items: ImageHistoryItem[] }>('/api/image/history'),
+
+  deleteImageHistory: (id: number) =>
+    request<{ ok: boolean }>(`/api/image/history/${id}`, { method: 'DELETE' }),
+
+  clearImageHistory: () =>
+    request<{ ok: boolean }>('/api/image/history', { method: 'DELETE' }),
 
   // 导出 MD（返回文件流，前端触发下载；背景/目标/约束由后端 AI 自动分析生成）
   exportMd: async (
