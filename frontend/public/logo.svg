@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="87 102 78 29" width="390" height="145" fill="none">
+  <title>飞鸟 · 你的灵感捕捉器</title>
+  <!-- 透明底版（无圆角方块），适合放在浅色背景、README、PPT 上 -->
+  <path d="M92 108 L100 108" stroke="#1D9E75" stroke-width="3" stroke-linecap="round"/>
+  <path d="M90 120 L98 120" stroke="#1D9E75" stroke-width="3" stroke-linecap="round"/>
+  <path d="M104 126 C114 112 121 112 127 124 C133 112 140 112 150 126" stroke="#1D9E75" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="157" cy="110" r="6" fill="#EF9F27"/>
+</svg>

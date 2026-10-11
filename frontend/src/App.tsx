@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from './api/client'
 import ConsolidatePanel from './components/ConsolidatePanel'
 import InspirationList from './components/InspirationList'
+import Logo from './components/Logo'
 import ModelSelect from './components/ModelSelect'
 import ProjectSidebar from './components/ProjectSidebar'
 import type { ConsolidateResult, Inspiration, ModelInfo, Project } from './types'
@@ -182,9 +183,15 @@ function App() {
       <div className="mx-auto max-w-5xl px-6 py-8">
         {/* 顶栏 */}
         <header className="flex items-center gap-3 border-b border-slate-200 pb-4 dark:border-emerald-900/40">
-          <h1 className="bg-gradient-to-r from-emerald-600 to-green-500 bg-clip-text text-2xl font-bold text-transparent dark:from-emerald-400 dark:to-green-300">
-            飞鸟
-          </h1>
+          <Logo size={36} />
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <h1 className="bg-gradient-to-r from-emerald-600 to-green-500 bg-clip-text text-2xl font-bold text-transparent dark:from-emerald-400 dark:to-green-300">
+              飞鸟
+            </h1>
+            <span className="text-xs font-medium tracking-wide text-slate-400 dark:text-slate-500">
+              你的灵感捕捉器
+            </span>
+          </div>
           <button
             onClick={handleToggleMode}
             title="点击切换清洗模式"
