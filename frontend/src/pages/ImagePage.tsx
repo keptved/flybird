@@ -50,7 +50,7 @@ const STORAGE_KEY = 'flybird-image-session-v2'
 const GREETING: Msg = {
   id: 0,
   role: 'ai',
-  text: '你好，我是图片创作向导。用一句大白话描述你想要的画面，我会一项一项帮你问清楚——右侧的提示词草稿会跟着你的回答逐段生长。任何时候你都可以点「就这样，直接出」。',
+  text: '你好，我是图片创作向导。用一句大白话描述你想要的画面，我会一项一项帮你问清楚——右侧的提示词草稿会跟着你的回答逐段生长。答完「画面主体」和「画面风格」后，随时可以点底部「✨ 生成提示词」。',
 }
 
 function loadSession(): Session | null {
@@ -92,6 +92,10 @@ export default function ImagePage() {
   const [session, setSession] = useState<Session | null>(loadSession)
   const [input, setInput] = useState('')
   const [polishing, setPolishing] = useState(false)
+  /** 正在润色的维度名（用于三点动效文案）；空串表示起手识别中 */
+  const [polishingDim, setPolishingDim] = useState('')
+  /** 点回修改：非空时输入写入该维度而不是回答下一个问题 */
+  const [editingKey, setEditingKey] = useState<string | null>(null)
   const [finalizing, setFinalizing] = useState(false)
   const [result, setResult] = useState<ImageFinalizeResult | null>(null)
   const [finalizeErr, setFinalizeErr] = useState('')
@@ -115,7 +119,14 @@ export default function ImagePage() {
   }, [session])
 
   const messages = session?.messages ?? [GREETING]
-  const pending = useMemo(() => (session ? nextQuestion(session) : null), [session])
+  const pending = useMemo<Pending | null>(() => {
+    if (!session) return null
+    if (editingKey) {
+      const dim = IMAGE_GUIDE.find((d) => d.key === editingKey)
+      return dim ? { dimKey: dim.key, title: dim.title, question: dim.question, options: [], isFollowUp: false } : null
+    }
+    return nextQuestion(session)
+  }, [session, editingKey])
   const answeredCount = session ? ASK_ITEMS.filter((d) => d.key in session.answers).length : 0
   const lastId = messages[messages.length - 1]?.id
 
@@ -167,7 +178,7 @@ export default function ImagePage() {
       s.messages.push({
         id: s.messages.length,
         role: 'ai',
-        text: '收到。我再按几个维度帮你补齐，一次只问一两个；不想答了就点底部「就这样，直接出」。',
+        text: '收到。我再按几个维度帮你补齐，一次只问一两个；不想答了随时点底部「✨ 生成提示词」。',
       })
     }
 
@@ -191,7 +202,7 @@ export default function ImagePage() {
     setPolishing(false)
   }
 
-  // 回答当前问题
+  // 回答当前问题（点回修改时 pending 指向被修改的维度，发送即覆盖）
   const answer = async (raw: string) => {
     const text = raw.trim()
     if (!session || !pending || !text || polishing) return
@@ -205,7 +216,9 @@ export default function ImagePage() {
     base.messages = [...session.messages, { id: session.messages.length, role: 'user', text }]
     setSession({ ...base })
     setInput('')
+    setEditingKey(null)
     setPolishing(true)
+    setPolishingDim(dim.title)
 
     // 润色
     let polished = ''
@@ -292,6 +305,7 @@ export default function ImagePage() {
       setResult(res)
       loadHistory() // 后端已自动落库，刷新历史列表
     } catch (e) {
+      console.error('生成失败：', e) // 真实错误只在控制台留底，页面显示人性化文案
       setFinalizeErr(e instanceof Error ? e.message : String(e))
     }
     setFinalizing(false)
@@ -526,8 +540,13 @@ ${h.negative}
               ))}
               {polishing && (
                 <div className="flex justify-start">
-                  <div className="rounded-2xl rounded-bl-sm border border-[#1B3A2C] bg-[#0A1410] px-4 py-2 text-[15px] text-[#5E7A6C]">
-                    {session ? '正在把回答润色成专业描述…' : '正在识别你描述里的关键信息…'}
+                  <div className="flex items-center gap-2 px-2 py-1 text-xs text-[#5E7A6C]">
+                    <span className="flex items-center gap-1">
+                      <span className="fb-dot h-1.5 w-1.5 rounded-full bg-[#4ADE80]" />
+                      <span className="fb-dot h-1.5 w-1.5 rounded-full bg-[#4ADE80]" />
+                      <span className="fb-dot h-1.5 w-1.5 rounded-full bg-[#4ADE80]" />
+                    </span>
+                    {session && polishingDim ? `正在润色「${polishingDim}」…` : '正在识别你描述里的关键信息…'}
                   </div>
                 </div>
               )}
@@ -561,9 +580,19 @@ ${h.negative}
               </div>
             )}
             {finalizeErr && (
-              <p className="mt-3 rounded-lg border border-[#FB7185]/30 bg-[#FB7185]/10 px-3 py-2 text-xs text-[#FB7185]">
-                生成失败：{finalizeErr}
-              </p>
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-[#FB7185]/30 bg-[#FB7185]/10 px-3 py-2">
+                <div>
+                  <p className="text-xs text-[#FB7185]">生成失败，请重试。</p>
+                  <p className="mt-0.5 text-[10px] text-[#FB7185]/70">（若反复失败，请检查模型名或切换模型）</p>
+                </div>
+                <button
+                  onClick={generate}
+                  disabled={finalizing}
+                  className="shrink-0 cursor-pointer rounded-lg border border-[#FB7185]/30 px-3 py-1 text-xs text-[#FB7185] transition hover:bg-[#FB7185]/10 active:scale-95"
+                >
+                  重试
+                </button>
+              </div>
             )}
 
             {/* 底部：进度条 + 输入框 + 生成按钮 */}
@@ -584,11 +613,13 @@ ${h.negative}
                 <input
                   className={inputCls}
                   placeholder={
-                    !session
-                      ? '例如：我想要一个深夜的书桌，台灯亮着，窗外在下雨，桌上有只猫'
-                      : pending
-                        ? '自由回答，或点上方选项'
-                        : '维度已补齐'
+                    editingKey && pending
+                      ? `正在修改「${pending.title}」，发送即覆盖`
+                      : !session
+                        ? '例如：我想要一个深夜的书桌，台灯亮着，窗外在下雨，桌上有只猫'
+                        : pending
+                          ? '自由回答，或点上方选项'
+                          : '维度已补齐'
                   }
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -597,6 +628,14 @@ ${h.negative}
                   }}
                   disabled={!pending && !!session}
                 />
+                {editingKey && (
+                  <button
+                    onClick={() => setEditingKey(null)}
+                    className="shrink-0 cursor-pointer rounded-xl border border-[#1B3A2C] px-3 py-2 text-xs text-[#5E7A6C] transition hover:text-[#8FA69C]"
+                  >
+                    取消修改
+                  </button>
+                )}
                 <button
                   onClick={submit}
                   disabled={!input.trim() || polishing || (!pending && !!session)}
@@ -617,7 +656,7 @@ ${h.negative}
                   {finalizing ? '生成中…' : '✨ 生成提示词'}
                 </button>
               </div>
-              <div className="mt-2 flex items-center justify-between text-xs">
+              <div className="mt-2 text-xs">
                 <p className="text-[#5E7A6C]">
                   {fullReady
                     ? complete
@@ -625,13 +664,8 @@ ${h.negative}
                       : '信息够了，可以出图了'
                     : minReady
                       ? '可以出图了，但再答几项会更可控'
-                      : '答完「画面主体」和「画面风格」后即可生成'}
+                      : '答完「画面主体」和「画面风格」后解锁生成'}
                 </p>
-                {session && !result && (
-                  <button onClick={generate} disabled={finalizing} className="cursor-pointer text-[#4ADE80] hover:underline">
-                    就这样，直接出 →
-                  </button>
-                )}
               </div>
             </div>
           </section>
@@ -666,7 +700,9 @@ ${h.negative}
                 return (
                   <div
                     key={dim.key}
-                    className="border-l-2 pl-3"
+                    onClick={ans ? () => setEditingKey(dim.key) : undefined}
+                    title={ans ? `点击回到「${dim.title}」修改` : undefined}
+                    className={`border-l-2 pl-3 ${ans ? 'cursor-pointer rounded-r-lg transition hover:bg-[#0A1410]' : ''}`}
                     style={{ borderLeftColor: ans ? '#4ADE80' : '#1B3A2C', opacity: ans ? 1 : 0.5 }}
                   >
                     <p className="flex items-center gap-2 text-xs text-[#8FA69C]">
@@ -686,6 +722,10 @@ ${h.negative}
                 )
               })}
             </div>
+
+            {session && (
+              <p className="mt-4 text-xs text-[#5E7A6C]">点任意一段，可回到那一问修改</p>
+            )}
 
             {!session && (
               <p className="mt-4 text-xs leading-5 text-[#5E7A6C]">
