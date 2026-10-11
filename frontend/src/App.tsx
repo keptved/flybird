@@ -1,29 +1,67 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from './api/client'
+import InspirationList from './components/InspirationList'
+import ProjectSidebar from './components/ProjectSidebar'
 import type { Inspiration, Project } from './types'
 
 function App() {
-  const [project, setProject] = useState<Project | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [currentId, setCurrentId] = useState<number | null>(null)
   const [rawText, setRawText] = useState('')
   const [loading, setLoading] = useState(false)
   const [latest, setLatest] = useState<Inspiration | null>(null)
+  const [history, setHistory] = useState<Inspiration[]>([])
   const [error, setError] = useState('')
 
-  // 加载默认项目
+  const currentProject = projects.find((p) => p.id === currentId) ?? null
+
+  // 加载某项目的灵感历史
+  const loadHistory = useCallback((projectId: number) => {
+    api.listInspirations(projectId).then(setHistory).catch(() => setHistory([]))
+  }, [])
+
+  // 初始化：加载项目列表
   useEffect(() => {
     api
       .listProjects()
-      .then((list) => setProject(list[0] ?? null))
+      .then((list) => {
+        setProjects(list)
+        if (list.length > 0) {
+          setCurrentId(list[0].id)
+          loadHistory(list[0].id)
+        }
+      })
       .catch(() => setError('无法连接后端，请确认后端服务已启动（localhost:8000）'))
-  }, [])
+  }, [loadHistory])
 
+  // 切换项目
+  const handleSelect = (id: number) => {
+    setCurrentId(id)
+    setLatest(null)
+    loadHistory(id)
+  }
+
+  // 新建项目
+  const handleCreateProject = async (name: string) => {
+    try {
+      const p = await api.createProject(name)
+      setProjects((prev) => [...prev, p])
+      handleSelect(p.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '创建项目失败')
+    }
+  }
+
+  // 清洗灵感
   const handleClean = async () => {
-    if (!project || !rawText.trim() || loading) return
+    if (!currentId || !rawText.trim() || loading) return
     setLoading(true)
     setError('')
     try {
-      const result = await api.createInspiration(project.id, rawText.trim())
+      const result = await api.createInspiration(currentId, rawText.trim())
       setLatest(result)
+      setRawText('')
+      loadHistory(currentId)
     } catch (e) {
       setError(e instanceof Error ? e.message : '清洗失败')
     } finally {
@@ -33,37 +71,14 @@ function App() {
 
   return (
     <div className="min-h-full bg-slate-50">
-      <div className="mx-auto max-w-4xl px-6 py-8">
+      <div className="mx-auto max-w-5xl px-6 py-8">
         {/* 顶栏 */}
         <header className="flex items-center gap-3 border-b border-slate-200 pb-4">
           <h1 className="text-xl font-semibold text-slate-800">灵感助手</h1>
           <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
             mock 模式
           </span>
-          <span className="ml-auto rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-            项目：{project?.name ?? '加载中…'}
-          </span>
         </header>
-
-        {/* 输入区 */}
-        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
-          <textarea
-            className="min-h-24 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 outline-none focus:border-green-400"
-            placeholder="用大白话描述你的灵感，不用管措辞……"
-            value={rawText}
-            onChange={(e) => setRawText(e.target.value)}
-          />
-          <div className="mt-3 flex items-center justify-between">
-            <span className="text-xs text-slate-400">用大白话描述，不用管措辞</span>
-            <button
-              onClick={handleClean}
-              disabled={loading || !rawText.trim() || !project}
-              className="rounded-lg bg-green-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {loading ? '清洗中…' : '✨ 清洗灵感'}
-            </button>
-          </div>
-        </section>
 
         {error && (
           <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
@@ -71,25 +86,65 @@ function App() {
           </p>
         )}
 
-        {/* 清洗前后对比 */}
-        {latest && (
-          <section className="mt-6">
-            <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-3">
-              <div className="rounded-xl border border-slate-200 bg-white p-5">
-                <p className="mb-2 text-xs font-medium text-slate-400">清洗前（原文）</p>
-                <p className="text-sm leading-6 text-slate-700">{latest.raw_text}</p>
+        <div className="mt-6 flex gap-6">
+          {/* 左侧：项目管理 */}
+          <ProjectSidebar
+            projects={projects}
+            currentId={currentId}
+            onSelect={handleSelect}
+            onCreate={handleCreateProject}
+          />
+
+          {/* 右侧：输入 + 对比 + 历史 */}
+          <main className="min-w-0 flex-1">
+            <section className="rounded-xl border border-slate-200 bg-white p-5">
+              <textarea
+                className="min-h-24 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 outline-none focus:border-green-400"
+                placeholder={`给「${currentProject?.name ?? '…'}」写一条灵感，大白话就行`}
+                value={rawText}
+                onChange={(e) => setRawText(e.target.value)}
+              />
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-xs text-slate-400">用大白话描述，不用管措辞</span>
+                <button
+                  onClick={handleClean}
+                  disabled={loading || !rawText.trim() || !currentId}
+                  className="rounded-lg bg-green-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {loading ? '清洗中…' : '✨ 清洗灵感'}
+                </button>
               </div>
-              <div className="self-center text-xl text-slate-300">→</div>
-              <div className="rounded-xl border-2 border-green-500 bg-white p-5">
-                <p className="mb-2 text-xs font-medium text-green-700">清洗后（精炼文本）</p>
-                <p className="text-sm leading-6 text-slate-800">{latest.cleaned_text}</p>
-              </div>
-            </div>
-            <p className="mt-3 text-xs text-slate-400">
-              ✓ 已自动保存到「{project?.name}」
-            </p>
-          </section>
-        )}
+            </section>
+
+            {/* 清洗前后对比 */}
+            {latest && (
+              <section className="mt-6">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-3">
+                  <div className="rounded-xl border border-slate-200 bg-white p-5">
+                    <p className="mb-2 text-xs font-medium text-slate-400">清洗前（原文）</p>
+                    <p className="text-sm leading-6 text-slate-700">{latest.raw_text}</p>
+                  </div>
+                  <div className="self-center text-xl text-slate-300">→</div>
+                  <div className="rounded-xl border-2 border-green-500 bg-white p-5">
+                    <p className="mb-2 text-xs font-medium text-green-700">清洗后（精炼文本）</p>
+                    <p className="text-sm leading-6 text-slate-800">{latest.cleaned_text}</p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-slate-400">
+                  ✓ 已自动保存到「{currentProject?.name}」
+                </p>
+              </section>
+            )}
+
+            {/* 历史记录 */}
+            <section className="mt-8">
+              <h2 className="mb-3 text-sm font-semibold text-slate-700">
+                灵感记录（{history.length} 条）
+              </h2>
+              <InspirationList items={history} />
+            </section>
+          </main>
+        </div>
       </div>
     </div>
   )

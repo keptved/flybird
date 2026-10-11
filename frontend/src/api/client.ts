@@ -17,6 +17,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   listProjects: () => request<Project[]>('/api/projects'),
 
+  createProject: (name: string) =>
+    request<Project>('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
   createInspiration: (project_id: number, raw_text: string) =>
     request<Inspiration>('/api/inspirations', {
       method: 'POST',
