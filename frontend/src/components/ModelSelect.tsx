@@ -9,7 +9,7 @@ interface Props {
   onModelsChange: (models: ModelInfo[]) => void
 }
 
-/** 模型选择器：下拉选择 + 添加自定义模型 */
+/** 模型选择器：下拉选择 + 添加自定义模型（弹窗居中，不会超出屏幕） */
 export default function ModelSelect({ models, value, onChange, onModelsChange }: Props) {
   const [open, setOpen] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -28,7 +28,6 @@ export default function ModelSelect({ models, value, onChange, onModelsChange }:
     const handler = (e: MouseEvent) => {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
         setOpen(false)
-        setShowForm(false)
       }
     }
     document.addEventListener('mousedown', handler)
@@ -69,74 +68,107 @@ export default function ModelSelect({ models, value, onChange, onModelsChange }:
         <span className="text-slate-300">▾</span>
       </button>
 
+      {/* 下拉列表：向下展开，限高可滚动 */}
       {open && (
-        <div className="absolute bottom-full right-0 z-10 mb-2 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
-          {!showForm ? (
-            <>
-              <ul className="max-h-48 space-y-1 overflow-y-auto">
-                <li>
-                  <button
-                    onClick={() => { onChange(null); setOpen(false) }}
-                    className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
-                      value === null ? 'bg-green-100 font-medium text-green-800' : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    默认（Mock 规则清洗）
-                  </button>
-                </li>
-                {models.filter((m) => !m.is_builtin).map((m) => (
-                  <li key={m.id} className="group flex items-center">
-                    <button
-                      onClick={() => { onChange(m.id); setOpen(false) }}
-                      className={`flex-1 rounded-lg px-3 py-2 text-left text-sm ${
-                        value === m.id ? 'bg-green-100 font-medium text-green-800' : 'text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {m.name}
-                      <span className="ml-1 text-xs text-slate-400">{m.model}</span>
-                      {!m.has_key && <span className="ml-1 text-xs text-amber-500">缺 key</span>}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(m.id)}
-                      className="hidden px-2 text-xs text-slate-300 hover:text-red-500 group-hover:block"
-                      title="删除"
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
+        <div className="absolute right-0 top-full z-10 mt-2 max-h-72 w-80 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+          <ul className="space-y-1">
+            <li>
               <button
-                onClick={() => setShowForm(true)}
-                className="mt-2 w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 transition hover:border-green-400 hover:text-green-600"
+                onClick={() => { onChange(null); setOpen(false) }}
+                className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
+                  value === null ? 'bg-green-100 font-medium text-green-800' : 'text-slate-600 hover:bg-slate-100'
+                }`}
               >
-                ＋ 添加自己的模型 API
+                默认（Mock 规则清洗）
               </button>
-            </>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-slate-500">添加 OpenAI 兼容模型</p>
-              <input className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-green-400"
-                placeholder="显示名，如：我的 DeepSeek" value={name} onChange={(e) => setName(e.target.value)} />
-              <input className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-green-400"
-                placeholder="Base URL" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
-              <input className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-green-400"
-                placeholder="模型名，如：deepseek-chat" value={model} onChange={(e) => setModel(e.target.value)} />
-              <input className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-green-400"
-                type="password" placeholder="API Key（只存在你本地数据库）" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
-              {error && <p className="text-xs text-red-500">{error}</p>}
-              <div className="flex gap-2">
-                <button onClick={() => setShowForm(false)}
-                  className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-50">
-                  返回
+            </li>
+            {models.filter((m) => !m.is_builtin).map((m) => (
+              <li key={m.id} className="group flex items-center">
+                <button
+                  onClick={() => { onChange(m.id); setOpen(false) }}
+                  className={`flex-1 rounded-lg px-3 py-2 text-left text-sm ${
+                    value === m.id ? 'bg-green-100 font-medium text-green-800' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {m.name}
+                  <span className="ml-1 text-xs text-slate-400">{m.model}</span>
+                  {!m.has_key && <span className="ml-1 text-xs text-amber-500">缺 key</span>}
                 </button>
-                <button onClick={handleAdd} disabled={saving || !name.trim()}
-                  className="flex-1 rounded-lg bg-green-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-600 disabled:bg-slate-300">
-                  {saving ? '保存中…' : '保存'}
+                <button
+                  onClick={() => handleDelete(m.id)}
+                  className="hidden px-2 text-xs text-slate-300 hover:text-red-500 group-hover:block"
+                  title="删除"
+                >
+                  ✕
                 </button>
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={() => { setShowForm(true); setOpen(false) }}
+            className="mt-2 w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 transition hover:border-green-400 hover:text-green-600"
+          >
+            ＋ 添加自己的模型 API
+          </button>
+        </div>
+      )}
+
+      {/* 添加模型弹窗：固定在屏幕中央，不受按钮位置影响 */}
+      {showForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => setShowForm(false)}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-4 text-base font-semibold text-slate-800">添加模型（OpenAI 兼容接口）</h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">显示名称</label>
+                <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-green-400"
+                  placeholder="例如：我的 DeepSeek" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">Base URL（接口地址）</label>
+                <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-green-400"
+                  placeholder="https://api.deepseek.com" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">模型名</label>
+                <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-green-400"
+                  placeholder="deepseek-chat" value={model} onChange={(e) => setModel(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">API Key（只存在你本地数据库）</label>
+                <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-green-400"
+                  type="password" placeholder="sk-xxxxxxxx" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
               </div>
             </div>
-          )}
+
+            {/* 常用配置示例 */}
+            <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-500">
+              <p className="mb-1 font-medium text-slate-600">常用配置示例：</p>
+              <p>• DeepSeek：<code>https://api.deepseek.com</code> / <code>deepseek-chat</code></p>
+              <p>• Kimi（月之暗面）：<code>https://api.moonshot.cn/v1</code> / <code>moonshot-v1-8k</code></p>
+              <p>• 通义千问：<code>https://dashscope.aliyuncs.com/compatible-mode/v1</code> / <code>qwen-plus</code></p>
+            </div>
+
+            {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
+
+            <div className="mt-5 flex gap-2">
+              <button onClick={() => setShowForm(false)}
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50">
+                取消
+              </button>
+              <button onClick={handleAdd} disabled={saving || !name.trim()}
+                className="flex-1 rounded-lg bg-green-500 px-3 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:bg-slate-300">
+                {saving ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
