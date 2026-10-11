@@ -151,6 +151,7 @@ export default function ModelSelect({ models, value, onChange, onModelsChange }:
             {/* 常用配置示例 */}
             <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-500">
               <p className="mb-1 font-medium text-slate-600">常用配置示例：</p>
+              <p>• LongCat（美团）：<code>https://api.longcat.chat/openai/v1</code> / <code>LongCat-Flash-Chat</code></p>
               <p>• DeepSeek：<code>https://api.deepseek.com</code> / <code>deepseek-chat</code></p>
               <p>• Kimi（月之暗面）：<code>https://api.moonshot.cn/v1</code> / <code>moonshot-v1-8k</code></p>
               <p>• 通义千问：<code>https://dashscope.aliyuncs.com/compatible-mode/v1</code> / <code>qwen-plus</code></p>

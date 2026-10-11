@@ -54,7 +54,7 @@ def create_model(payload: ModelCreate):
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="模型名称不能为空")
-    if payload.provider_type != "mock" and not (payload.base_url.strip() and payload.model.strip()):
+    if not (payload.base_url.strip() and payload.model.strip()):
         raise HTTPException(status_code=400, detail="base_url 和 model 不能为空")
 
     with Session(engine) as session:

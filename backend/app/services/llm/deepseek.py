@@ -31,22 +31,51 @@ class OpenAICompatibleProvider:
         self.model = model
 
     def _chat(self, prompt: str, max_tokens: int = 512) -> str:
-        """发起一次 chat completion 调用，返回文本内容"""
-        resp = httpx.post(
-            f"{self.base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,
-                "max_tokens": max_tokens,
-            },
-            timeout=60.0,
-        )
-        resp.raise_for_status()
+        """发起一次 chat completion 调用，返回文本内容。
+
+        出错时抛出带中文定位信息的 RuntimeError：
+        网络层（连不上/超时）、认证层（key 无效）、参数层（模型名错误）、额度层（限流）。
+        """
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3,
+                    "max_tokens": max_tokens,
+                },
+                timeout=60.0,
+            )
+        except httpx.ConnectError:
+            raise RuntimeError(
+                f"网络错误：连不上 {self.base_url}，请检查 Base URL 是否拼写正确、网络是否通畅"
+            )
+        except httpx.TimeoutException:
+            raise RuntimeError("网络错误：请求超时（60 秒），接口响应太慢或网络不稳定")
+
+        if resp.status_code != 200:
+            # 尝试解析接口返回的错误信息
+            try:
+                err_msg = resp.json().get("error", {}).get("message", resp.text[:200])
+            except Exception:
+                err_msg = resp.text[:200]
+
+            if resp.status_code in (401, 403):
+                raise RuntimeError(f"认证失败：API Key 无效或已过期（{err_msg}）")
+            if resp.status_code == 404:
+                raise RuntimeError(
+                    f"模型名错误：「{self.model}」在该平台不存在（{err_msg}），"
+                    "请检查模型名拼写，例如 DeepSeek 应填 deepseek-chat"
+                )
+            if resp.status_code == 429:
+                raise RuntimeError(f"额度问题：触发限流或余额不足（{err_msg}）")
+            raise RuntimeError(f"接口返回错误 {resp.status_code}：{err_msg}")
+
         data = resp.json()
         return data["choices"][0]["message"]["content"].strip()
 
