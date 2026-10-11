@@ -290,13 +290,70 @@ export default function ImagePage() {
   }
 
   const exportMd = () => {
-    if (!result) return
-    const md = `# 图片提示词\n\n## 英文提示词\n\n${result.prompt_en}\n\n## 中文对照\n\n${result.prompt_zh}\n\n## 负面词\n\n${result.negative}\n\n## 参数\n\n- style: ${result.params.style}\n- ratio: ${result.params.ratio}\n`
+    if (!result || !session) return
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+
+    // 维度速览表：按 IMAGE_GUIDE 顺序列出问答记录
+    const dimRows = IMAGE_GUIDE
+      .filter((d) => d.key !== 'negative')
+      .map((d) => `| ${d.title} | ${session.answers[d.key] ?? d.defaultValue ?? '—（自动补全）—'} |`)
+      .join('\n')
+
+    const md = `# 🎨 AI 绘画提示词
+
+> 由 **飞鸟 · 图片创作助手** 生成 · ${timeStr}
+> 适用工具：Midjourney / Stable Diffusion / 即梦 / DALL·E / 通义万相 等主流生图 AI
+
+---
+
+## 一、英文提示词（复制这段去投喂）
+
+\`\`\`text
+${result.prompt_en}
+\`\`\`
+
+## 二、中文对照（看懂它画的是什么）
+
+${result.prompt_zh}
+
+## 三、负面提示词（Negative Prompt）
+
+\`\`\`text
+${result.negative}
+\`\`\`
+
+> 作用：告诉 AI **不要**出现什么——文字、水印、多余手指、变形、模糊等。
+> 如果你的工具不支持负面词（如 Midjourney 需用 \`--no\` 参数），可忽略本节。
+
+## 四、画面参数
+
+| 参数 | 值 | 说明 |
+|---|---|---|
+| 画面风格 | ${result.params.style} | 决定整体调性 |
+| 画幅比例 | ${result.params.ratio} | Midjourney 对应 \`--ar ${result.params.ratio}\` |
+
+## 五、创作设定回顾
+
+| 维度 | 你的设定 |
+|---|---|
+${dimRows}
+
+## 六、微调建议
+
+- **每次只改一个变量**：不满意时先换风格词，再调光线，不要全改
+- 画面崩坏（多手指/变形）→ 检查负面词是否生效
+- 主体超过 3 个容易崩 → 建议拆分生成后自行拼图
+
+---
+*飞鸟助手平台 · 图片创作助手*
+`
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `图片提示词-${Date.now()}.md`
+    a.download = `图片提示词-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.md`
     a.click()
     URL.revokeObjectURL(url)
   }
