@@ -21,6 +21,9 @@ export const api = {
   createProject: (name: string) =>
     request<Project>('/api/projects', { method: 'POST', body: JSON.stringify({ name }) }),
 
+  deleteProject: (id: number) =>
+    request<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
+
   // 灵感
   createInspiration: (project_id: number, raw_text: string, model_id: number | null) =>
     request<Inspiration>('/api/inspirations', {

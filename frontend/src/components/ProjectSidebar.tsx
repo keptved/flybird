@@ -6,10 +6,11 @@ interface Props {
   currentId: number | null
   onSelect: (id: number) => void
   onCreate: (name: string) => Promise<void>
+  onDelete: (id: number) => Promise<void>
 }
 
-/** 左侧项目栏：项目列表 + 新建项目 */
-export default function ProjectSidebar({ projects, currentId, onSelect, onCreate }: Props) {
+/** 左侧项目栏：项目列表（支持删除） + 新建项目 */
+export default function ProjectSidebar({ projects, currentId, onSelect, onCreate, onDelete }: Props) {
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
 
@@ -31,16 +32,27 @@ export default function ProjectSidebar({ projects, currentId, onSelect, onCreate
 
       <ul className="space-y-1">
         {projects.map((p) => (
-          <li key={p.id}>
+          <li key={p.id} className="group flex items-center">
             <button
               onClick={() => onSelect(p.id)}
-              className={`w-full cursor-pointer rounded-xl px-3 py-2 text-left text-sm transition ${
+              className={`flex-1 cursor-pointer rounded-xl px-3 py-2 text-left text-sm transition ${
                 p.id === currentId
                   ? 'bg-green-100 font-medium text-green-800 dark:bg-emerald-500/20 dark:text-emerald-300'
                   : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
               }`}
             >
               {p.name}
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm(`确定删除项目「${p.name}」吗？其中的灵感会一起删除。`)) {
+                  onDelete(p.id)
+                }
+              }}
+              className="hidden cursor-pointer px-2 text-xs text-slate-300 transition hover:text-red-500 group-hover:block dark:text-slate-600 dark:hover:text-red-400"
+              title="删除项目"
+            >
+              ✕
             </button>
           </li>
         ))}

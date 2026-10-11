@@ -1,10 +1,10 @@
-"""项目路由：列表、创建"""
+"""项目路由：列表、创建、删除"""
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..db import engine
-from ..models import Project
+from ..models import Inspiration, Project
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -32,3 +32,17 @@ def create_project(payload: ProjectCreate):
         session.commit()
         session.refresh(project)
         return project
+
+
+@router.delete("/{project_id}")
+def delete_project(project_id: int):
+    """删除项目，连带删除其下的所有灵感"""
+    with Session(engine) as session:
+        project = session.get(Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="项目不存在")
+        for insp in session.exec(select(Inspiration).where(Inspiration.project_id == project_id)).all():
+            session.delete(insp)
+        session.delete(project)
+        session.commit()
+        return {"ok": True}

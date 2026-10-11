@@ -74,6 +74,27 @@ function App() {
     }
   }
 
+  // 删除项目：连带删除其灵感；若删的是当前项目，切到剩下的第一个
+  const handleDeleteProject = async (id: number) => {
+    try {
+      await api.deleteProject(id)
+      const remain = projects.filter((p) => p.id !== id)
+      setProjects(remain)
+      if (currentId === id) {
+        if (remain.length > 0) {
+          handleSelect(remain[0].id)
+        } else {
+          setCurrentId(null)
+          setHistory([])
+          setLatest(null)
+          setConsolidated(null)
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '删除项目失败')
+    }
+  }
+
   // 一键切换 Mock / API 模式：切到 API 时用第一个已配置的非内置模型
   const handleToggleMode = () => {
     if (modelId === null) {
@@ -197,6 +218,7 @@ function App() {
             currentId={currentId}
             onSelect={handleSelect}
             onCreate={handleCreateProject}
+            onDelete={handleDeleteProject}
           />
 
           {/* 右侧：输入 + 对比 + 整合 + 历史 */}
