@@ -1,15 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import os
+
 from .db import init_db
 from .routers import consolidate, export, image, inspirations, models, projects
 
 app = FastAPI(title="灵感助手 API")
 
-# 允许前端开发服务器访问
+# 允许前端开发服务器访问；线上前端域名通过 CORS_ORIGINS 环境变量注入，本地不设时行为不变
+_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[o.strip() for o in _origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,6 +1,7 @@
 import type { ConsolidateResult, ImageExtractResult, ImageFinalizeResult, ImageHistoryItem, ImagePolishResult, Inspiration, ModelInfo, Project } from '../types'
 
-const BASE_URL = 'http://localhost:8000'
+// 线上由 Vercel 注入 VITE_API_BASE；本地不设环境变量时仍走 localhost，不影响线下演示
+const BASE_URL = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const resp = await fetch(`${BASE_URL}${path}`, {
