@@ -1,0 +1,16 @@
+# 依赖与构建产物
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.venv/
+
+# 环境配置与密钥
+.env
+
+# 本地数据库
+*.db
+
+# 编辑器
+.vscode/
+.idea/
