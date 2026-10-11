@@ -93,6 +93,21 @@ function App() {
     }
   }
 
+  // 导出 MD：有整合结果导整合版，否则导全部清洗后灵感
+  const handleExport = async () => {
+    if (!currentId) return
+    setError('')
+    try {
+      if (consolidated) {
+        await api.exportMd(currentId, consolidated.results, '（整合版）')
+      } else {
+        await api.exportMd(currentId, history.map((h) => h.cleaned_text), '')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '导出失败')
+    }
+  }
+
   return (
     <div className="min-h-full bg-slate-50">
       <div className="mx-auto max-w-5xl px-6 py-8">
@@ -174,14 +189,24 @@ function App() {
                 <h2 className="text-sm font-semibold text-slate-700">
                   灵感记录（{history.length} 条）
                 </h2>
-                <button
-                  onClick={handleConsolidate}
-                  disabled={consolidating || history.length < 2}
-                  className="rounded-lg border border-green-500 px-4 py-1.5 text-sm font-medium text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
-                  title={history.length < 2 ? '至少 2 条灵感才能整合' : '去重合并当前项目的所有灵感'}
-                >
-                  {consolidating ? '整合中…' : '🧩 整合灵感'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExport}
+                    disabled={history.length === 0}
+                    className="rounded-lg border border-slate-300 px-4 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                    title={consolidated ? '导出整合后的结果' : '导出全部清洗后的灵感'}
+                  >
+                    ⬇ 导出 MD
+                  </button>
+                  <button
+                    onClick={handleConsolidate}
+                    disabled={consolidating || history.length < 2}
+                    className="rounded-lg border border-green-500 px-4 py-1.5 text-sm font-medium text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                    title={history.length < 2 ? '至少 2 条灵感才能整合' : '去重合并当前项目的所有灵感'}
+                  >
+                    {consolidating ? '整合中…' : '🧩 整合灵感'}
+                  </button>
+                </div>
               </div>
               <ConsolidatePanel
                 result={consolidated}

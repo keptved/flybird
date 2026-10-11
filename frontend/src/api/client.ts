@@ -46,4 +46,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ model_id }),
     }),
+
+  // 导出 MD（返回文件流，前端触发下载）
+  exportMd: async (projectId: number, items: string[], titleSuffix: string) => {
+    const resp = await fetch(`${BASE_URL}/api/projects/${projectId}/export.md`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, title_suffix: titleSuffix }),
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }))
+      throw new Error(err.detail || '导出失败')
+    }
+    const blob = await resp.blob()
+    // 从响应头解析文件名，解析不到就用默认名
+    const cd = resp.headers.get('Content-Disposition') ?? ''
+    const match = cd.match(/filename\*=UTF-8''([^;]+)/)
+    const filename = match ? decodeURIComponent(match[1]) : '灵感导出.md'
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  },
 }
