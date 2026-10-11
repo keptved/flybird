@@ -94,3 +94,60 @@ class MockProvider:
             result.append(best)
 
         return result
+
+    # 图片创作助手 · 口语→书面小词表（mock polish 用）
+    # 只放多字安全词：单字替换会误伤（如 "美"→"美丽" 会把 "美女" 变成 "美丽女"）
+    POLISH_WORDS = {
+        "有点暗": "略显昏暗",
+        "有点亮": "略显明亮",
+        "有点": "略带",
+        "好看": "美观",
+        "漂亮": "美丽",
+        "帅气": "英俊",
+        "很大": "宏大",
+        "很小": "小巧",
+        "很多": "许多",
+        "暖和": "温暖",
+        "舒服": "舒适",
+        "安静": "宁静",
+        "穿着": "身着",
+        "戴着": "佩戴",
+        "拿着": "手持",
+        "在下雨": "落雨",
+        "下着雨": "落雨",
+    }
+
+    # 各维度常用画面描述前缀（避免复读 raw_text）
+    POLISH_TEMPLATES: dict[str, str] = {
+        "图片类型": "画面类型为{value}",
+        "画面主体": "画面主体为{value}",
+        "主体细节": "主体呈现{value}",
+        "场景背景": "场景设定为{value}",
+        "光线氛围": "光线与氛围表现为{value}",
+        "构图镜头": "构图与镜头角度为{value}",
+        "画质比例": "画面比例为{value}",
+    }
+
+    def polish_image(self, dimension: str, raw_text: str) -> str:
+        """规则版补话：去口水词 + 口语词换书面词 + 套维度模板，避免复读。"""
+        text = raw_text.strip()
+        if not text:
+            return text
+
+        # 1. 去口水词（复用 clean 逻辑，但不去标点和重复字符）
+        for filler in sorted(self.FILLERS, key=len, reverse=True):
+            text = re.sub(filler, "", text)
+        text = re.sub(r"\s+", " ", text).strip()
+
+        # 2. 口语→书面替换
+        for collo, formal in sorted(self.POLISH_WORDS.items(), key=lambda kv: len(kv[0]), reverse=True):
+            text = text.replace(collo, formal)
+
+        # 3. 去首尾语气词/冗余符号
+        text = text.strip("，,。！？；;、 ")
+        if not text:
+            text = raw_text.strip()
+
+        # 4. 套模板（防止只是复读）
+        tpl = self.POLISH_TEMPLATES.get(dimension, "{value}")
+        return tpl.format(value=text)

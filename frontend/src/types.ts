@@ -28,3 +28,8 @@ export interface ConsolidateResult {
   merged_count: number
   results: string[]
 }
+
+/** 图片创作助手 · 单项润色响应 */
+export interface ImagePolishResult {
+  polished: string
+}

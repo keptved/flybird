@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import init_db
-from .routers import consolidate, export, inspirations, models, projects
+from .routers import consolidate, export, image, inspirations, models, projects
 
 app = FastAPI(title="灵感助手 API")
 
@@ -45,3 +45,4 @@ app.include_router(inspirations.router)
 app.include_router(models.router)
 app.include_router(consolidate.router)
 app.include_router(export.router)
+app.include_router(image.router)

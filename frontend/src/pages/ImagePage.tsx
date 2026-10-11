@@ -17,7 +17,10 @@ interface Msg {
 /** 会话状态：只存前端 state + localStorage，不落库 */
 interface Session {
   opening: string
+  /** 各维度「润色后」的答案（用于草稿展示与合成） */
   answers: Record<string, string>
+  /** 各维度「用户原始输入」的答案（用于条件追问触发词匹配，防止润色后失配） */
+  raws: Record<string, string>
   followUpDone: Record<string, boolean>
   messages: Msg[]
 }
@@ -43,7 +46,11 @@ const GREETING: Msg = {
 function loadSession(): Session | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as Session) : null
+    if (!raw) return null
+    const s = JSON.parse(raw) as Session
+    // 兼容 S1 旧会话：没有 raws 字段时用 answers 兜底
+    if (!s.raws) s.raws = { ...s.answers }
+    return s
   } catch {
     return null
   }
@@ -62,7 +69,8 @@ function nextQuestion(s: Session): Pending | null {
         isFollowUp: false,
       }
     }
-    const fu = dim.followUps?.find((f) => s.answers[dim.id].includes(f.trigger))
+    // 条件追问用原始输入匹配，避免润色后触发词被改写
+    const fu = dim.followUps?.find((f) => (s.raws[dim.id] ?? '').includes(f.trigger))
     if (fu && !s.followUpDone[dim.id]) {
       return {
         dimId: dim.id,
@@ -84,6 +92,7 @@ export default function ImagePage() {
   const [modelId, setModelId] = useState<number | null>(null)
   const [session, setSession] = useState<Session | null>(loadSession)
   const [input, setInput] = useState('')
+  const [polishing, setPolishing] = useState(false)
 
   useEffect(() => {
     api.listModels().then(setModels).catch(() => {})
@@ -105,7 +114,7 @@ export default function ImagePage() {
   const start = () => {
     const text = input.trim()
     if (!text || session) return
-    const s: Session = { opening: text, answers: {}, followUpDone: {}, messages: [GREETING] }
+    const s: Session = { opening: text, answers: {}, raws: {}, followUpDone: {}, messages: [GREETING] }
     s.messages.push({ id: s.messages.length, role: 'user', text })
     s.messages.push({
       id: s.messages.length,
@@ -125,37 +134,60 @@ export default function ImagePage() {
     setInput('')
   }
 
-  // 回答当前问题（chips 点选或自由输入都行）
-  const answer = (raw: string) => {
+  // 回答当前问题（chips 点选或自由输入都行）：先上屏，再调后端润色（"补话"）
+  const answer = async (raw: string) => {
     const text = raw.trim()
-    if (!session || !pending || !text) return
-    const answers = { ...session.answers }
-    answers[pending.dimId] =
-      pending.isFollowUp && answers[pending.dimId]
-        ? `${answers[pending.dimId]}，${text}`
-        : text
-    const followUpDone = pending.isFollowUp
-      ? { ...session.followUpDone, [pending.dimId]: true }
+    if (!session || !pending || !text || polishing) return
+    const dim = pending
+
+    // 追问答案与已有原文合并；润色始终针对合并后的原文，避免重复包装
+    const raws = { ...session.raws }
+    raws[dim.dimId] =
+      dim.isFollowUp && raws[dim.dimId] ? `${raws[dim.dimId]}，${text}` : text
+    const followUpDone = dim.isFollowUp
+      ? { ...session.followUpDone, [dim.dimId]: true }
       : session.followUpDone
-    const next: Session = { ...session, answers, followUpDone }
-    next.messages = [...session.messages, { id: session.messages.length, role: 'user', text }]
+
+    // 第一步：用户气泡先上屏，进入润色中状态
+    const base: Session = { ...session, raws, followUpDone }
+    base.messages = [...session.messages, { id: session.messages.length, role: 'user', text }]
+    setSession({ ...base })
+    setInput('')
+    setPolishing(true)
+
+    // 第二步：调 /api/image/polish 润色；失败则记原文并在气泡里注明原因
+    let polished = ''
+    let failReason = ''
+    try {
+      const res = await api.polishImage(dim.title, raws[dim.dimId], modelId)
+      polished = res.polished.trim()
+    } catch (e) {
+      failReason = e instanceof Error ? e.message : String(e)
+    }
+
+    const answers = { ...base.answers, [dim.dimId]: polished || raws[dim.dimId] }
+    const next: Session = { ...base, answers }
+    next.messages = [...base.messages]
+    const noted = polished
+      ? `「${dim.title}」记为：${polished}`
+      : `「${dim.title}」先记下原文（润色失败：${failReason}）`
     const p = nextQuestion(next)
     if (p) {
       next.messages.push({
         id: next.messages.length,
         role: 'ai',
-        text: `「${pending.title}」记下了。下一问 · ${p.title}：${p.question}`,
+        text: `${noted}。下一问 · ${p.title}：${p.question}`,
         options: p.options,
       })
     } else {
       next.messages.push({
         id: next.messages.length,
         role: 'ai',
-        text: `「${pending.title}」记下了。7 个维度全部补齐，右侧草稿已经长成，就等合成了。`,
+        text: `${noted}。7 个维度全部补齐，右侧草稿已经长成，就等合成了。`,
       })
     }
     setSession(next)
-    setInput('')
+    setPolishing(false)
   }
 
   const submit = () => (session ? answer(input) : start())
@@ -227,6 +259,14 @@ export default function ImagePage() {
                   </div>
                 </div>
               ))}
+              {/* 润色中提示 */}
+              {polishing && (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl rounded-bl-sm border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-400 dark:border-emerald-900/40 dark:bg-slate-950/50 dark:text-slate-500">
+                    正在把回答润色成专业描述…
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 底部：输入框 + 生成按钮 */}
@@ -246,11 +286,11 @@ export default function ImagePage() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') submit()
                   }}
-                  disabled={finished}
+                  disabled={finished || polishing}
                 />
                 <button
                   onClick={submit}
-                  disabled={!input.trim() || finished}
+                  disabled={!input.trim() || finished || polishing}
                   className="shrink-0 cursor-pointer rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:shadow-none dark:border-emerald-900/60 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:disabled:border-slate-800 dark:disabled:text-slate-600"
                 >
                   {session ? '发送' : '开始'}

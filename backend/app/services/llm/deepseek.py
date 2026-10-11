@@ -191,3 +191,14 @@ class OpenAICompatibleProvider:
         # 解析编号列表
         lines = [re.sub(r"^\d+[\.、]\s*", "", line).strip() for line in content.split("\n")]
         return [line for line in lines if line]
+
+    def polish_image(self, dimension: str, raw_text: str) -> str:
+        """让模型把某一维度的大白话润色成专业画面描述。
+        S5 再细化 system prompt，这里先保证可用。"""
+        prompt = (
+            "你是一位 AI 绘画提示词专家。请把用户在「{dimension}」维度上的大白话描述，"
+            "润色成一句可直接进入绘画提示词的专业画面描述："
+            "使用书面语、准确具体、突出画面感，不要输出任何解释。\n\n"
+            "原始描述：{raw_text}\n\n专业描述："
+        ).format(dimension=dimension, raw_text=raw_text)
+        return self._chat(prompt, max_tokens=256)

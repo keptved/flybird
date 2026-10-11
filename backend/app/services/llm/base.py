@@ -26,3 +26,8 @@ class LLMProvider(Protocol):
         """根据项目名和灵感清单，自动分析生成导出用的背景/目标/约束。
         返回 {"background": str, "goal": str, "constraints": str}，constraints 为多行文本。"""
         ...
+
+    def polish_image(self, dimension: str, raw_text: str) -> str:
+        """图片创作助手·补话：把某一引导维度的大白话答案，
+        润色成一句专业的画面描述（书面语、可直接进入绘画提示词）"""
+        ...

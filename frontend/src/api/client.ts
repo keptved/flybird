@@ -1,4 +1,4 @@
-import type { ConsolidateResult, Inspiration, ModelInfo, Project } from '../types'
+import type { ConsolidateResult, ImagePolishResult, Inspiration, ModelInfo, Project } from '../types'
 
 const BASE_URL = 'http://localhost:8000'
 
@@ -57,6 +57,13 @@ export const api = {
     request<ConsolidateResult>(`/api/projects/${projectId}/consolidate`, {
       method: 'POST',
       body: JSON.stringify({ model_id }),
+    }),
+
+  // 图片创作助手 · 单项润色
+  polishImage: (dimension: string, rawText: string, modelId: number | null) =>
+    request<ImagePolishResult>('/api/image/polish', {
+      method: 'POST',
+      body: JSON.stringify({ dimension, raw_text: rawText, model_id: modelId }),
     }),
 
   // 导出 MD（返回文件流，前端触发下载；背景/目标/约束由后端 AI 自动分析生成）
